@@ -12,7 +12,7 @@ class _CPMMachineMixin(object):
 
     __BIOS_COLD_BOOT = 0
     __BIOS_WARM_BOOT = 1
-    __BIOS_CON_STATUS = 2
+    __BIOS_CONSOLE_STATUS = 2
     __BIOS_CON_INPUT = 3
     __BIOS_CON_OUTPUT = 4
     __BIOS_LIST_OUTPUT = 5
@@ -68,6 +68,9 @@ class _CPMMachineMixin(object):
 
         self.pc = 0x9400
 
+    def __console_status(self):
+        self.a = 0
+
     def __select_disk(self):
         self.hl = 0
 
@@ -86,6 +89,8 @@ class _CPMMachineMixin(object):
             self.__cold_boot()
         elif v == self.__BIOS_WARM_BOOT:
             self.__warm_boot()
+        elif v == self.__BIOS_CONSOLE_STATUS:
+            self.__console_status()
         elif v == self.__BIOS_SELECT_DISK:
             self.__select_disk()
         elif v == self.__BIOS_SET_DMA:
