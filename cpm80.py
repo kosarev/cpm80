@@ -68,6 +68,9 @@ class _CPMMachineMixin(object):
 
         self.pc = 0x9400
 
+    def __select_disk(self):
+        self.hl = 0
+
     def __set_dma(self):
         self.__dma = self.bc
 
@@ -83,6 +86,8 @@ class _CPMMachineMixin(object):
             self.__cold_boot()
         elif v == self.__BIOS_WARM_BOOT:
             self.__warm_boot()
+        elif v == self.__BIOS_SELECT_DISK:
+            self.__select_disk()
         elif v == self.__BIOS_SET_DMA:
             self.__set_dma()
         else:
