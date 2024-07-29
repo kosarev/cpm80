@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
+import termios
+import tty
 import z80
 
 
@@ -14,7 +16,7 @@ class _CPMMachineMixin(object):
     __BIOS_COLD_BOOT = 0
     __BIOS_WARM_BOOT = 1
     __BIOS_CONSOLE_STATUS = 2
-    __BIOS_CON_INPUT = 3
+    __BIOS_CONSOLE_INPUT = 3
     __BIOS_CONSOLE_OUTPUT = 4
     __BIOS_LIST_OUTPUT = 5
     __BIOS_PUNCH_OUTPUT = 6
@@ -72,8 +74,26 @@ class _CPMMachineMixin(object):
     def __console_status(self):
         self.a = 0
 
+    def __console_input(self):
+        # Borrowed from:
+        # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = ord(sys.stdin.read(1))
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        # Catch Ctrl+C.
+        if ch == 3:
+            sys.exit()
+
+        self.a = ch & 0x7f
+
     def __console_output(self):
         sys.stdout.write(chr(self.c))
+        sys.stdout.flush()
 
     def __select_disk(self):
         self.hl = 0
@@ -95,6 +115,8 @@ class _CPMMachineMixin(object):
             self.__warm_boot()
         elif v == self.__BIOS_CONSOLE_STATUS:
             self.__console_status()
+        elif v == self.__BIOS_CONSOLE_INPUT:
+            self.__console_input()
         elif v == self.__BIOS_CONSOLE_OUTPUT:
             self.__console_output()
         elif v == self.__BIOS_SELECT_DISK:
