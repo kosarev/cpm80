@@ -48,6 +48,8 @@ class _CPMMachineMixin(object):
 
         self.sp = 0x100
 
+        self.__dma_addr = 0x80
+
         BDOS_ENTRY = BDOS_BASE + 0x11
         JMP_BDOS = JMP + BDOS_ENTRY.to_bytes(2, 'little')
         self.set_memory_block(self.__BDOS, JMP_BDOS)
@@ -66,6 +68,9 @@ class _CPMMachineMixin(object):
 
         self.pc = 0x9400
 
+    def __set_dma(self):
+        self.__dma = self.bc
+
     def __handle_breakpoint(self):
         pc = self.pc
         offset = pc - self.__BIOS_BASE
@@ -78,6 +83,8 @@ class _CPMMachineMixin(object):
             self.__cold_boot()
         elif v == self.__BIOS_WARM_BOOT:
             self.__warm_boot()
+        elif v == self.__BIOS_SET_DMA:
+            self.__set_dma()
         else:
             assert 0, f'hit BIOS vector {v}'
 
