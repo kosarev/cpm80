@@ -5,7 +5,10 @@ import z80
 
 class _CPMMachineMixin(object):
     __REBOOT = 0x0000
+    __BDOS = 0x0005
     __TPA = 0x0100
+
+    __BIOS_BASE = 0xaa00
 
     __BIOS_COLD_BOOT = 0
     __BIOS_WARM_BOOT = 1
@@ -27,24 +30,56 @@ class _CPMMachineMixin(object):
     __BIOS_NUM_VECTORS = 17
 
     def __init__(self):
+        self.__cold_boot()
+
+    def __cold_boot(self):
         with open('bdos-44k.bin', 'rb') as f:
-            self.set_memory_block(0x9c00, f.read())
+            BDOS_BASE = 0x9c00
+            self.set_memory_block(BDOS_BASE, f.read())
 
-        with open('ccp-44k.bin', 'rb') as f:
-            self.set_memory_block(0x9400, f.read())
-
-        BIOS = 0xaa00
-        JMP_BIOS = b'\xc3' + BIOS.to_bytes(2, 'little')
+        JMP = b'\xc3'
+        JMP_BIOS = JMP + self.__BIOS_BASE.to_bytes(2, 'little')
         self.set_memory_block(self.__REBOOT, JMP_BIOS)
 
         for v in range(self.__BIOS_NUM_VECTORS):
-            addr = BIOS + v * 3
+            addr = self.__BIOS_BASE + v * 3
             self.set_memory_block(addr, b'\xc9')  # ret
             self.set_breakpoint(addr)
 
+        self.sp = 0x100
+
+        BDOS_ENTRY = BDOS_BASE + 0x11
+        JMP_BDOS = JMP + BDOS_ENTRY.to_bytes(2, 'little')
+        self.set_memory_block(self.__BDOS, JMP_BDOS)
+
+        CURRENT_DISK = 0
+        CURRENT_DISK_ADDR = 0x0004
+        self.set_memory_block(CURRENT_DISK_ADDR,
+                              CURRENT_DISK.to_bytes(1, 'little'))
+
+        self.c = CURRENT_DISK
+        self.__warm_boot()
+
+    def __warm_boot(self):
+        with open('ccp-44k.bin', 'rb') as f:
+            self.set_memory_block(0x9400, f.read())
+
+        self.pc = 0x9400
+
     def __handle_breakpoint(self):
         pc = self.pc
-        assert 0, 'hit a breakpoint at 0x%04x' % pc
+        offset = pc - self.__BIOS_BASE
+        assert offset >= 0 and offset % 3 == 0
+
+        v = offset // 3
+        assert v < self.__BIOS_NUM_VECTORS
+
+        if v == self.__BIOS_COLD_BOOT:
+            self.__cold_boot()
+        elif v == self.__BIOS_WARM_BOOT:
+            self.__warm_boot()
+        else:
+            assert 0, f'hit BIOS vector {v}'
 
     def run(self):
         while True:
