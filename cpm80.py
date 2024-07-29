@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import z80
 
 
@@ -14,7 +15,7 @@ class _CPMMachineMixin(object):
     __BIOS_WARM_BOOT = 1
     __BIOS_CONSOLE_STATUS = 2
     __BIOS_CON_INPUT = 3
-    __BIOS_CON_OUTPUT = 4
+    __BIOS_CONSOLE_OUTPUT = 4
     __BIOS_LIST_OUTPUT = 5
     __BIOS_PUNCH_OUTPUT = 6
     __BIOS_READER_INPUT = 7
@@ -71,6 +72,9 @@ class _CPMMachineMixin(object):
     def __console_status(self):
         self.a = 0
 
+    def __console_output(self):
+        sys.stdout.write(chr(self.c))
+
     def __select_disk(self):
         self.hl = 0
 
@@ -91,6 +95,8 @@ class _CPMMachineMixin(object):
             self.__warm_boot()
         elif v == self.__BIOS_CONSOLE_STATUS:
             self.__console_status()
+        elif v == self.__BIOS_CONSOLE_OUTPUT:
+            self.__console_output()
         elif v == self.__BIOS_SELECT_DISK:
             self.__select_disk()
         elif v == self.__BIOS_SET_DMA:
