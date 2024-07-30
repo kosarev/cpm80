@@ -32,8 +32,65 @@ class _CPMMachineMixin(object):
     __BIOS_SECTOR_TRANSLATE = 16
     __BIOS_NUM_VECTORS = 17
 
+    __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
+
     def __init__(self):
         self.__cold_boot()
+
+    def __allocate_disk_table_block(self, image):
+        addr = self.__disk_tables_heap
+        self.__disk_tables_heap += len(image)
+        self.set_memory_block(addr, image)
+        return addr
+
+    def __set_up_disk_tables(self):
+        bls_block_size = 2048
+        spt_sectors_per_track = 40
+        bsh_block_shift_factor = 4
+        blm_allocation_block_mask = 15  # Depends on BSH.
+        exm_extent_mask = 1  # EXM = 1 and DSM < 256 means BLS = 2048.
+        dsm_disk_size_max = 194  # In BLS units.
+        drm_max_dir_entry = 63
+        al0_allocation_mask = 128  # 1 block for 64 dirs, 32 bytes each.
+        al1_allocation_mask = 0
+        cks_directory_check_size = 16
+        off_system_tracks_offset = 2
+
+        removable = True
+        cks = (drm_max_dir_entry + 1) // 4 if removable else 0
+
+        # Shared by all identical drives.
+        dpb_disk_param_block = self.__allocate_disk_table_block(
+            spt_sectors_per_track.to_bytes(2, 'little') +
+            bsh_block_shift_factor.to_bytes(1, 'little') +
+            blm_allocation_block_mask.to_bytes(1, 'little') +
+            exm_extent_mask.to_bytes(1, 'little') +
+            dsm_disk_size_max.to_bytes(2, 'little') +
+            drm_max_dir_entry.to_bytes(2, 'little') +
+            al0_allocation_mask.to_bytes(1, 'little') +
+            al1_allocation_mask.to_bytes(1, 'little') +
+            cks_directory_check_size.to_bytes(2, 'little') +
+            off_system_tracks_offset.to_bytes(2, 'little'))
+
+        # Shared by all drives.
+        dirbuf_scratch_pad = self.__allocate_disk_table_block(b'\x00' * 128)
+
+        xlt_sector_translation_vector = 0x0000
+        bdos_scratch_pad = 0x0000
+        csv_scratch_pad = self.__allocate_disk_table_block(b'\x00' * cks)
+        alv_scratch_pad = self.__allocate_disk_table_block(
+            b'\x00' * (dsm_disk_size_max // 8 + 1))
+
+        self.__disk_header_table = self.__allocate_disk_table_block(
+            xlt_sector_translation_vector.to_bytes(2, 'little') +
+            bdos_scratch_pad.to_bytes(2, 'little') +
+            dirbuf_scratch_pad.to_bytes(2, 'little') +
+            dpb_disk_param_block.to_bytes(2, 'little') +
+            csv_scratch_pad.to_bytes(2, 'little') +
+            alv_scratch_pad.to_bytes(2, 'little'))
+
+        disk_size = (dsm_disk_size_max + 1) * bls_block_size
+        self.__disk_image = bytearray(disk_size)
 
     def __cold_boot(self):
         with open('bdos-44k.bin', 'rb') as f:
@@ -48,6 +105,9 @@ class _CPMMachineMixin(object):
             addr = self.__BIOS_BASE + v * 3
             self.set_memory_block(addr, b'\xc9')  # ret
             self.set_breakpoint(addr)
+
+        self.__disk_tables_heap = self.__BIOS_DISK_TABLES_HEAP_BASE
+        self.__set_up_disk_tables()
 
         self.sp = 0x100
 
@@ -96,6 +156,10 @@ class _CPMMachineMixin(object):
         sys.stdout.flush()
 
     def __select_disk(self):
+        DISK_A = 0
+        if self.c == DISK_A:
+            return self.__disk_header_table
+
         self.hl = 0
 
     def __set_dma(self):
