@@ -160,6 +160,10 @@ class _CPMMachineMixin(object):
         if ch == 3:
             sys.exit()
 
+        # Translate backspace.
+        if ch == 127:
+            ch = 8
+
         self.a = ch & 0x7f
 
     def __console_output(self):
