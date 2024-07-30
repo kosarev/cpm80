@@ -92,6 +92,8 @@ class _CPMMachineMixin(object):
         disk_size = (dsm_disk_size_max + 1) * bls_block_size
         self.__disk_image = bytearray(disk_size)
 
+        self.__disk_track = 0
+
     def __cold_boot(self):
         with open('bdos-44k.bin', 'rb') as f:
             BDOS_BASE = 0x9c00
@@ -155,6 +157,9 @@ class _CPMMachineMixin(object):
         sys.stdout.write(chr(self.c))
         sys.stdout.flush()
 
+    def __disk_home(self):
+        self.__disk_track = 0
+
     def __select_disk(self):
         DISK_A = 0
         if self.c == DISK_A:
@@ -183,6 +188,8 @@ class _CPMMachineMixin(object):
             self.__console_input()
         elif v == self.__BIOS_CONSOLE_OUTPUT:
             self.__console_output()
+        elif v == self.__BIOS_DISK_HOME:
+            self.__disk_home()
         elif v == self.__BIOS_SELECT_DISK:
             self.__select_disk()
         elif v == self.__BIOS_SET_DMA:
