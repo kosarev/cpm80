@@ -96,6 +96,7 @@ class _CPMMachineMixin(object):
 
         disk_size = (dsm_disk_size_max + 1) * bls_block_size
         self.__disk_image = bytearray(disk_size)
+        self.__disk_image[:] = b'\xe5' * disk_size
 
         skew_factor = 0  # No translation.
         # self.__physical_sectors = tuple(range(spt_sectors_per_track))
