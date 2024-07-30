@@ -100,6 +100,7 @@ class _CPMMachineMixin(object):
         # self.__physical_sectors = tuple(range(spt_sectors_per_track))
 
         self.__disk_track = 0
+        self.__disk_sector = 0
 
     def __cold_boot(self):
         with open('bdos-44k.bin', 'rb') as f:
@@ -178,6 +179,9 @@ class _CPMMachineMixin(object):
     def __set_track(self):
         self.__disk_track = self.bc
 
+    def __set_sector(self):
+        self.__disk_sector = self.bc
+
     def __set_dma(self):
         self.__dma = self.bc
 
@@ -213,6 +217,8 @@ class _CPMMachineMixin(object):
             self.__select_disk()
         elif v == self.__BIOS_SET_TRACK:
             self.__set_track()
+        elif v == self.__BIOS_SET_SECTOR:
+            self.__set_sector()
         elif v == self.__BIOS_SET_DMA:
             self.__set_dma()
         elif v == self.__BIOS_SECTOR_TRANSLATE:
