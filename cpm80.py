@@ -44,6 +44,7 @@ class _CPMMachineMixin(object):
         return addr
 
     def __set_up_disk_tables(self):
+        # TODO: Have a class describing disk parameters.
         bls_block_size = 2048
         spt_sectors_per_track = 40
         bsh_block_shift_factor = 4
@@ -185,6 +186,15 @@ class _CPMMachineMixin(object):
     def __set_dma(self):
         self.__dma = self.bc
 
+    def __read_disk(self):
+        # TODO: Separate the disk emulation logic.
+        SECTOR_SIZE = 128
+        offset = self.__disk_sector * SECTOR_SIZE
+        data = self.__disk_image[offset:offset + SECTOR_SIZE]
+        dest = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
+        dest[:] = data
+        self.a = 0  # Read OK.
+
     def __sector_translate(self):
         translate_table = self.de
         assert translate_table == 0x0000
@@ -221,6 +231,8 @@ class _CPMMachineMixin(object):
             self.__set_sector()
         elif v == self.__BIOS_SET_DMA:
             self.__set_dma()
+        elif v == self.__BIOS_READ_DISK:
+            self.__read_disk()
         elif v == self.__BIOS_SECTOR_TRANSLATE:
             self.__sector_translate()
         else:
