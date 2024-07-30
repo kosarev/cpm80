@@ -76,14 +76,18 @@ class _CPMMachineMixin(object):
         dirbuf_scratch_pad = self.__allocate_disk_table_block(b'\x00' * 128)
 
         xlt_sector_translation_vector = 0x0000
-        bdos_scratch_pad = 0x0000
+        bdos_scratch_pad1 = 0x0000
+        bdos_scratch_pad2 = 0x0000
+        bdos_scratch_pad3 = 0x0000
         csv_scratch_pad = self.__allocate_disk_table_block(b'\x00' * cks)
         alv_scratch_pad = self.__allocate_disk_table_block(
             b'\x00' * (dsm_disk_size_max // 8 + 1))
 
         self.__disk_header_table = self.__allocate_disk_table_block(
             xlt_sector_translation_vector.to_bytes(2, 'little') +
-            bdos_scratch_pad.to_bytes(2, 'little') +
+            bdos_scratch_pad1.to_bytes(2, 'little') +
+            bdos_scratch_pad2.to_bytes(2, 'little') +
+            bdos_scratch_pad3.to_bytes(2, 'little') +
             dirbuf_scratch_pad.to_bytes(2, 'little') +
             dpb_disk_param_block.to_bytes(2, 'little') +
             csv_scratch_pad.to_bytes(2, 'little') +
@@ -163,7 +167,8 @@ class _CPMMachineMixin(object):
     def __select_disk(self):
         DISK_A = 0
         if self.c == DISK_A:
-            return self.__disk_header_table
+            self.hl = self.__disk_header_table
+            return
 
         self.hl = 0
 
