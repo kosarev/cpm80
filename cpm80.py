@@ -172,6 +172,9 @@ class _CPMMachineMixin(object):
 
         self.hl = 0
 
+    def __set_track(self):
+        self.__disk_track = self.bc
+
     def __set_dma(self):
         self.__dma = self.bc
 
@@ -197,6 +200,8 @@ class _CPMMachineMixin(object):
             self.__disk_home()
         elif v == self.__BIOS_SELECT_DISK:
             self.__select_disk()
+        elif v == self.__BIOS_SET_TRACK:
+            self.__set_track()
         elif v == self.__BIOS_SET_DMA:
             self.__set_dma()
         else:
