@@ -47,7 +47,7 @@ class _CPMMachineMixin(object):
         bls_block_size = 2048
         spt_sectors_per_track = 40
         bsh_block_shift_factor = 4
-        blm_allocation_block_mask = 15  # Depends on BSH.
+        blm_allocation_block_mask = 15  # = 2**BSH - 1.
         exm_extent_mask = 1  # EXM = 1 and DSM < 256 means BLS = 2048.
         dsm_disk_size_max = 194  # In BLS units.
         drm_max_dir_entry = 63
@@ -95,6 +95,9 @@ class _CPMMachineMixin(object):
 
         disk_size = (dsm_disk_size_max + 1) * bls_block_size
         self.__disk_image = bytearray(disk_size)
+
+        skew_factor = 0  # No translation.
+        # self.__physical_sectors = tuple(range(spt_sectors_per_track))
 
         self.__disk_track = 0
 
@@ -178,6 +181,14 @@ class _CPMMachineMixin(object):
     def __set_dma(self):
         self.__dma = self.bc
 
+    def __sector_translate(self):
+        translate_table = self.de
+        assert translate_table == 0x0000
+
+        logical_sector = self.bc
+        physical_sector = logical_sector
+        self.hl = physical_sector
+
     def __handle_breakpoint(self):
         pc = self.pc
         offset = pc - self.__BIOS_BASE
@@ -204,6 +215,8 @@ class _CPMMachineMixin(object):
             self.__set_track()
         elif v == self.__BIOS_SET_DMA:
             self.__set_dma()
+        elif v == self.__BIOS_SECTOR_TRANSLATE:
+            self.__sector_translate()
         else:
             assert 0, f'hit BIOS vector {v}'
 
