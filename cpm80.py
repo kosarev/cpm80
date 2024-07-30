@@ -34,6 +34,8 @@ class _CPMMachineMixin(object):
 
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
+    __SECTOR_SIZE = 128
+
     def __init__(self):
         self.__cold_boot()
 
@@ -103,6 +105,8 @@ class _CPMMachineMixin(object):
 
         self.__disk_track = 0
         self.__disk_sector = 0
+
+        self.__sectors_per_track = spt_sectors_per_track
 
     def __cold_boot(self):
         with open('bdos-44k.bin', 'rb') as f:
@@ -193,12 +197,20 @@ class _CPMMachineMixin(object):
 
     def __read_disk(self):
         # TODO: Separate the disk emulation logic.
-        SECTOR_SIZE = 128
-        offset = self.__disk_sector * SECTOR_SIZE
-        data = self.__disk_image[offset:offset + SECTOR_SIZE]
-        dest = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
-        dest[:] = data
+        sector_index = (self.__disk_sector +
+                        self.__disk_track * self.__sectors_per_track)
+        offset = sector_index * self.__SECTOR_SIZE
+        data = self.__disk_image[offset:offset + self.__SECTOR_SIZE]
+        self.memory[self.__dma:self.__dma + self.__SECTOR_SIZE] = data
         self.a = 0  # Read OK.
+
+    def __write_disk(self):
+        sector_index = (self.__disk_sector +
+                        self.__disk_track * self.__sectors_per_track)
+        offset = sector_index * self.__SECTOR_SIZE
+        data = self.memory[self.__dma:self.__dma + self.__SECTOR_SIZE]
+        self.__disk_image[offset:offset + self.__SECTOR_SIZE] = data
+        self.a = 0  # Write OK.
 
     def __sector_translate(self):
         translate_table = self.de
@@ -238,6 +250,8 @@ class _CPMMachineMixin(object):
             self.__set_dma()
         elif v == self.__BIOS_READ_DISK:
             self.__read_disk()
+        elif v == self.__BIOS_WRITE_DISK:
+            self.__write_disk()
         elif v == self.__BIOS_SECTOR_TRANSLATE:
             self.__sector_translate()
         else:
