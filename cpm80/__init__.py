@@ -6,6 +6,8 @@ import termios
 import tty
 import z80
 
+SECTOR_SIZE = 128
+
 
 class DiskFormat(object):
     def __init__(self):
@@ -22,6 +24,22 @@ class DiskFormat(object):
         self.off_system_tracks_offset = 2
         self.removable = True
         self.skew_factor = 0  # No translation.
+
+        self.disk_size = (self.dsm_disk_size_max + 1) * self.bls_block_size
+
+
+class DiskImage(object):
+    def __init__(self, format):
+        self.format = format
+
+        size = format.disk_size
+        self.image = bytearray(size)
+        self.image[:] = b'\xe5' * size
+
+    def get_sector(self, sector, track):
+        sector_index = sector + track * self.format.spt_sectors_per_track
+        offset = sector_index * SECTOR_SIZE
+        return memoryview(self.image)[offset:offset + SECTOR_SIZE]
 
 
 class _CPMMachineMixin(object):
@@ -51,8 +69,6 @@ class _CPMMachineMixin(object):
     __BIOS_NUM_VECTORS = 17
 
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
-
-    __SECTOR_SIZE = 128
 
     def __init__(self):
         self.__cold_boot()
@@ -101,14 +117,9 @@ class _CPMMachineMixin(object):
             csv_scratch_pad.to_bytes(2, 'little') +
             alv_scratch_pad.to_bytes(2, 'little'))
 
-        disk_size = (f.dsm_disk_size_max + 1) * f.bls_block_size
-        self.__disk_image = bytearray(disk_size)
-        self.__disk_image[:] = b'\xe5' * disk_size
-
+        self.__disk = DiskImage(f)
         self.__disk_track = 0
         self.__disk_sector = 0
-
-        self.__sectors_per_track = f.spt_sectors_per_track
 
     @staticmethod
     def __load_data(path):
@@ -199,20 +210,13 @@ class _CPMMachineMixin(object):
         self.__dma = self.bc
 
     def __read_disk(self):
-        # TODO: Separate the disk emulation logic.
-        sector_index = (self.__disk_sector +
-                        self.__disk_track * self.__sectors_per_track)
-        offset = sector_index * self.__SECTOR_SIZE
-        data = self.__disk_image[offset:offset + self.__SECTOR_SIZE]
-        self.memory[self.__dma:self.__dma + self.__SECTOR_SIZE] = data
+        data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
+        self.memory[self.__dma:self.__dma + SECTOR_SIZE] = data
         self.a = 0  # Read OK.
 
     def __write_disk(self):
-        sector_index = (self.__disk_sector +
-                        self.__disk_track * self.__sectors_per_track)
-        offset = sector_index * self.__SECTOR_SIZE
-        data = self.memory[self.__dma:self.__dma + self.__SECTOR_SIZE]
-        self.__disk_image[offset:offset + self.__SECTOR_SIZE] = data
+        data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
+        data[:] = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
         self.a = 0  # Write OK.
 
     def __sector_translate(self):
