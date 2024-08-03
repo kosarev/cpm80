@@ -1,1 +1,3 @@
 *.bin
+cpm80.egg-info
+cpm80/__pycache__
