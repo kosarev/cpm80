@@ -24,6 +24,7 @@ setuptools.setup(
     license='MIT',
     packages=['cpm80'],
     install_requires=['z80'],
+    package_data={'cpm80': ['*.bin']},
     entry_points={
         'console_scripts': [
             'cpm80 = cpm80:main',

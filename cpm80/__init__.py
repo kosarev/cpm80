@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import importlib.resources
 import sys
 import termios
 import tty
@@ -108,10 +109,13 @@ class _CPMMachineMixin(object):
 
         self.__sectors_per_track = spt_sectors_per_track
 
+    @staticmethod
+    def __load_data(path):
+        return importlib.resources.files('cpm80').joinpath(path).read_bytes()
+
     def __cold_boot(self):
-        with open('bdos.bin', 'rb') as f:
-            BDOS_BASE = 0x9c00
-            self.set_memory_block(BDOS_BASE, f.read())
+        BDOS_BASE = 0x9c00
+        self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
 
         JMP = b'\xc3'
         JMP_BIOS = JMP + self.__BIOS_BASE.to_bytes(2, 'little')
@@ -142,9 +146,7 @@ class _CPMMachineMixin(object):
         self.__warm_boot()
 
     def __warm_boot(self):
-        with open('ccp.bin', 'rb') as f:
-            self.set_memory_block(0x9400, f.read())
-
+        self.set_memory_block(0x9400, self.__load_data('ccp.bin'))
         self.pc = 0x9400
 
     def __console_status(self):
