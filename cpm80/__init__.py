@@ -71,6 +71,7 @@ class _CPMMachineMixin(object):
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
     def __init__(self):
+        self.__ctrl_c_count = 0
         self.__cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -177,7 +178,9 @@ class _CPMMachineMixin(object):
 
         # Catch Ctrl+C.
         if ch == 3:
-            sys.exit()
+            self.__ctrl_c_count += 1
+        else:
+            self.__ctrl_c_count = 0
 
         # Translate backspace.
         if ch == 127:
@@ -270,6 +273,9 @@ class _CPMMachineMixin(object):
 
             if events & self._BREAKPOINT_HIT:
                 self.__handle_breakpoint()
+
+            if self.__ctrl_c_count >= 3:
+                break
 
 
 class I8080CPMMachine(_CPMMachineMixin, z80.I8080Machine):
