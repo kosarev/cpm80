@@ -109,7 +109,7 @@ class _CPMMachineMixin(object):
         self.__sectors_per_track = spt_sectors_per_track
 
     def __cold_boot(self):
-        with open('bdos-44k.bin', 'rb') as f:
+        with open('bdos.bin', 'rb') as f:
             BDOS_BASE = 0x9c00
             self.set_memory_block(BDOS_BASE, f.read())
 
@@ -142,7 +142,7 @@ class _CPMMachineMixin(object):
         self.__warm_boot()
 
     def __warm_boot(self):
-        with open('ccp-44k.bin', 'rb') as f:
+        with open('ccp.bin', 'rb') as f:
             self.set_memory_block(0x9400, f.read())
 
         self.pc = 0x9400
