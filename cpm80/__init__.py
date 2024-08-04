@@ -128,6 +128,18 @@ class DisplayDevice(object):
         sys.stdout.flush()
 
 
+class StringDisplay(object):
+    def __init__(self):
+        self.__output = []
+
+    def output(self, c):
+        self.__output.append(c)
+
+    @property
+    def string(self):
+        return ''.join(chr(c) for c in self.__output)
+
+
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
