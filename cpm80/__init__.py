@@ -52,7 +52,7 @@ class _CPMMachineMixin(object):
 
     def __init__(self):
         self.__ctrl_c_count = 0
-        self.__cold_boot()
+        self.boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
         addr = self.__disk_tables_heap
@@ -106,7 +106,7 @@ class _CPMMachineMixin(object):
     def __load_data(path):
         return importlib.resources.files('cpm80').joinpath(path).read_bytes()
 
-    def __cold_boot(self):
+    def boot_cold_boot(self):
         BDOS_BASE = 0x9c00
         self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
 
@@ -115,23 +115,23 @@ class _CPMMachineMixin(object):
         self.set_memory_block(self.__REBOOT, JMP_BIOS)
 
         BIOS_VECTORS = (
-            self.__cold_boot,
-            self.__warm_boot,
-            self.__console_status,
-            self.__console_input,
-            self.__console_output,
-            self.__list_output,
-            self.__punch_output,
-            self.__reader_input,
-            self.__disk_home,
-            self.__select_disk,
-            self.__set_track,
-            self.__set_sector,
-            self.__set_dma,
-            self.__read_disk,
-            self.__write_disk,
-            self.__list_status,
-            self.__sector_translate)
+            self.boot_cold_boot,
+            self.wboot_warm_boot,
+            self.const_console_status,
+            self.conin_console_input,
+            self.conout_console_output,
+            self.list_output,
+            self.punch_output,
+            self.reader_input,
+            self.home_disk_home,
+            self.seldsk_select_disk,
+            self.settrk_set_track,
+            self.setsec_set_sector,
+            self.setdma_set_dma,
+            self.read_disk,
+            self.write_disk,
+            self.listst_list_status,
+            self.sectran_sector_translate)
 
         self.__bios_vectors = {}
         for i, v in enumerate(BIOS_VECTORS):
@@ -158,16 +158,16 @@ class _CPMMachineMixin(object):
                               CURRENT_DISK.to_bytes(1, 'little'))
 
         self.c = CURRENT_DISK
-        self.__warm_boot()
+        self.wboot_warm_boot()
 
-    def __warm_boot(self):
+    def wboot_warm_boot(self):
         self.set_memory_block(0x9400, self.__load_data('ccp.bin'))
         self.pc = 0x9400
 
-    def __console_status(self):
+    def const_console_status(self):
         self.a = 0
 
-    def __console_input(self):
+    def conin_console_input(self):
         # Borrowed from:
         # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
         fd = sys.stdin.fileno()
@@ -190,23 +190,23 @@ class _CPMMachineMixin(object):
 
         self.a = ch & 0x7f
 
-    def __console_output(self):
+    def conout_console_output(self):
         sys.stdout.write(chr(self.c))
         sys.stdout.flush()
 
-    def __list_output(self):
+    def list_output(self):
         assert 0  # TODO
 
-    def __punch_output(self):
+    def punch_output(self):
         assert 0  # TODO
 
-    def __reader_input(self):
+    def reader_input(self):
         assert 0  # TODO
 
-    def __disk_home(self):
+    def home_disk_home(self):
         self.__disk_track = 0
 
-    def __select_disk(self):
+    def seldsk_select_disk(self):
         DISK_A = 0
         if self.c == DISK_A:
             self.hl = self.__disk_header_table
@@ -214,29 +214,29 @@ class _CPMMachineMixin(object):
 
         self.hl = 0
 
-    def __set_track(self):
+    def settrk_set_track(self):
         self.__disk_track = self.bc
 
-    def __set_sector(self):
+    def setsec_set_sector(self):
         self.__disk_sector = self.bc
 
-    def __set_dma(self):
+    def setdma_set_dma(self):
         self.__dma = self.bc
 
-    def __read_disk(self):
+    def read_disk(self):
         data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
         self.memory[self.__dma:self.__dma + SECTOR_SIZE] = data
         self.a = 0  # Read OK.
 
-    def __write_disk(self):
+    def write_disk(self):
         data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
         data[:] = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
         self.a = 0  # Write OK.
 
-    def __list_status(self):
+    def listst_list_status(self):
         assert 0  # TODO
 
-    def __sector_translate(self):
+    def sectran_sector_translate(self):
         translate_table = self.de
         assert translate_table == 0x0000
 
