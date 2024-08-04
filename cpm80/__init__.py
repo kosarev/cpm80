@@ -122,6 +122,12 @@ class StringKeyboard(object):
         return self.__i >= len(self.__input)
 
 
+class DisplayDevice(object):
+    def output(self, c):
+        sys.stdout.write(chr(c))
+        sys.stdout.flush()
+
+
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
@@ -130,8 +136,9 @@ class CPMMachineMixin(object):
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
-    def __init__(self, *, console_reader=None):
+    def __init__(self, *, console_reader=None, console_writer=None):
         self.__console_reader = console_reader or KeyboardDevice()
+        self.__console_writer = console_writer or DisplayDevice()
         self.boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -248,8 +255,7 @@ class CPMMachineMixin(object):
         self.a = self.__console_reader.input()
 
     def conout_console_output(self):
-        sys.stdout.write(chr(self.c))
-        sys.stdout.flush()
+        self.__console_writer.output(self.c)
 
     def list_output(self):
         assert 0  # TODO
@@ -312,9 +318,10 @@ class CPMMachineMixin(object):
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
-    def __init__(self, *, console_reader=None):
+    def __init__(self, *, console_reader=None, console_writer=None):
         z80.I8080Machine.__init__(self)
-        CPMMachineMixin.__init__(self, console_reader=console_reader)
+        CPMMachineMixin.__init__(self, console_reader=console_reader,
+                                 console_writer=console_writer)
 
 
 def main():
