@@ -322,14 +322,11 @@ class CPMMachineMixin(object):
             v()
 
     def run(self):
-        while True:
+        while not self.__done:
             events = super().run()
 
             if events & self._BREAKPOINT_HIT:
                 self.handle_breakpoint()
-
-            if self.__done:
-                break
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
