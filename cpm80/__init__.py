@@ -251,8 +251,7 @@ class CPMMachineMixin(object):
         self.__dma = self.bc
 
     def read_disk(self):
-        data = self.__drive.read_sector()
-        self.memory[self.__dma:self.__dma + SECTOR_SIZE] = data
+        self.set_memory_block(self.__dma, self.__drive.read_sector())
         self.a = 0  # Read OK.
 
     def write_disk(self):
