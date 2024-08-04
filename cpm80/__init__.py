@@ -93,6 +93,8 @@ class KeyboardDevice(object):
         # Catch Ctrl+C.
         if ch == 3:
             self.__ctrl_c_count += 1
+            if self.__ctrl_c_count >= 3:
+                return None
         else:
             self.__ctrl_c_count = 0
 
@@ -102,10 +104,6 @@ class KeyboardDevice(object):
 
         return ch
 
-    @property
-    def end_of_input(self):
-        return self.__ctrl_c_count >= 3
-
 
 class StringKeyboard(object):
     def __init__(self, *commands):
@@ -113,13 +111,12 @@ class StringKeyboard(object):
         self.__i = 0
 
     def input(self):
+        if self.__i >= len(self.__input):
+            return None
+
         c = self.__input[self.__i]
         self.__i += 1
         return ord(c)
-
-    @property
-    def end_of_input(self):
-        return self.__i >= len(self.__input)
 
 
 class DisplayDevice(object):
@@ -151,6 +148,7 @@ class CPMMachineMixin(object):
     def __init__(self, *, console_reader=None, console_writer=None):
         self.__console_reader = console_reader or KeyboardDevice()
         self.__console_writer = console_writer or DisplayDevice()
+        self.__done = False
         self.boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -264,7 +262,12 @@ class CPMMachineMixin(object):
         self.a = 0
 
     def conin_console_input(self):
-        self.a = self.__console_reader.input()
+        c = self.__console_reader.input()
+        if c is None:
+            self.__done = True
+            return
+
+        self.a = c
 
     def conout_console_output(self):
         self.__console_writer.output(self.c)
@@ -325,7 +328,7 @@ class CPMMachineMixin(object):
             if events & self._BREAKPOINT_HIT:
                 self.handle_breakpoint()
 
-            if self.__console_reader.end_of_input:
+            if self.__done:
                 break
 
 

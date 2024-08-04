@@ -8,7 +8,6 @@ COMMANDS = (
     'dir',
     'save 1 a.dat',
     'dir',
-    '',  # Empty line to see the output of the last 'dir'.
     )
 
 console_reader = cpm80.StringKeyboard(*COMMANDS)
