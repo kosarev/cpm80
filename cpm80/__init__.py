@@ -28,6 +28,12 @@ class DiskFormat(object):
 
         self.disk_size = (self.dsm_disk_size_max + 1) * self.bls_block_size
 
+    def translate_sector(self, logical_sector):
+        # TODO: Support arbitrary skew factors.
+        assert self.skew_factor == 0
+        physical_sector = logical_sector
+        return physical_sector
+
 
 class DiskImage(object):
     def __init__(self, format):
@@ -41,6 +47,9 @@ class DiskImage(object):
         sector_index = sector + track * self.format.spt_sectors_per_track
         offset = sector_index * SECTOR_SIZE
         return memoryview(self.image)[offset:offset + SECTOR_SIZE]
+
+    def translate_sector(self, logical_sector):
+        return self.format.translate_sector(logical_sector)
 
 
 class _CPMMachineMixin(object):
@@ -238,12 +247,7 @@ class _CPMMachineMixin(object):
         assert 0  # TODO
 
     def sectran_sector_translate(self):
-        translate_table = self.de
-        assert translate_table == 0x0000
-
-        logical_sector = self.bc
-        physical_sector = logical_sector
-        self.hl = physical_sector
+        self.hl = self.__disk.translate_sector(self.bc)
 
     def handle_breakpoint(self):
         v = self.__bios_vectors.get(self.pc)
