@@ -244,7 +244,7 @@ class _CPMMachineMixin(object):
         physical_sector = logical_sector
         self.hl = physical_sector
 
-    def __handle_breakpoint(self):
+    def handle_breakpoint(self):
         v = self.__bios_vectors.get(self.pc)
         if v:
             v()
@@ -254,7 +254,7 @@ class _CPMMachineMixin(object):
             events = super().run()
 
             if events & self._BREAKPOINT_HIT:
-                self.__handle_breakpoint()
+                self.handle_breakpoint()
 
             if self.__ctrl_c_count >= 3:
                 break
