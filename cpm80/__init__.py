@@ -71,6 +71,38 @@ class DiskDrive(object):
         sector[:] = data
 
 
+class KeyboardDevice(object):
+    def __init__(self):
+        self.__ctrl_c_count = 0
+
+    def input(self):
+        # Borrowed from:
+        # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = ord(sys.stdin.read(1))
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        # Catch Ctrl+C.
+        if ch == 3:
+            self.__ctrl_c_count += 1
+        else:
+            self.__ctrl_c_count = 0
+
+        # Translate backspace.
+        if ch == 127:
+            ch = 8
+
+        return ch
+
+    @property
+    def end_of_input(self):
+        return self.__ctrl_c_count >= 3
+
+
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
@@ -80,7 +112,7 @@ class CPMMachineMixin(object):
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
     def __init__(self):
-        self.__ctrl_c_count = 0
+        self.__console_reader = KeyboardDevice()
         self.boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -195,27 +227,7 @@ class CPMMachineMixin(object):
         self.a = 0
 
     def conin_console_input(self):
-        # Borrowed from:
-        # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            ch = ord(sys.stdin.read(1))
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-        # Catch Ctrl+C.
-        if ch == 3:
-            self.__ctrl_c_count += 1
-        else:
-            self.__ctrl_c_count = 0
-
-        # Translate backspace.
-        if ch == 127:
-            ch = 8
-
-        self.a = ch & 0x7f
+        self.a = self.__console_reader.input()
 
     def conout_console_output(self):
         sys.stdout.write(chr(self.c))
@@ -277,7 +289,7 @@ class CPMMachineMixin(object):
             if events & self._BREAKPOINT_HIT:
                 self.handle_breakpoint()
 
-            if self.__ctrl_c_count >= 3:
+            if self.__console_reader.end_of_input:
                 break
 
 
