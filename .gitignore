@@ -1,4 +1,5 @@
+build/
 cpm80.egg-info
 cpm80/__pycache__
 dist/
-build/
+tests/__pycache__
