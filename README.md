@@ -32,8 +32,14 @@ Press <kbd>Ctrl</kbd> + <kbd>C</kbd> three times to exit.
 
 ## Running commands automatically
 
-Using the `StringKeyboard` class we can automatically feed
-commands to the command processor, CCP.
+From the command line:
+
+```shell
+$ cpm80 -c dir 'save 1 a.dat' dir
+```
+
+Alternatively, we can use the API's `StringKeyboard` class to
+feed arbitrary commands to the command processor, CCP.
 
 ```python3
 import cpm80

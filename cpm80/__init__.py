@@ -339,14 +339,18 @@ class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
                                  console_writer=console_writer)
 
 
-def main():
-    console_reader = None
-    ''' TODO: Turn into a test.
-    console_reader = StringKeyboard(
-        'dir\n'
-        'save 1 a.dat\n'
-        'dir\n\n')
-    '''
+def main(args=None):
+    import argparse
+    parser = argparse.ArgumentParser(description='CP/M-80 2.2 emulator.')
+    parser.add_argument('-c', '--commands', metavar='CMD', type=str, nargs='+',
+                        help='run commands as if they were typed in manually')
+    args = parser.parse_args(args)
+
+    if args.commands is None:
+        console_reader = KeyboardDevice()
+    else:
+        console_reader = StringKeyboard(*args.commands)
+
     m = I8080CPMMachine(console_reader=console_reader)
     m.run()
 
