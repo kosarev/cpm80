@@ -52,6 +52,25 @@ class DiskImage(object):
         return self.format.translate_sector(logical_sector)
 
 
+class DiskDrive(object):
+    def __init__(self, image):
+        self.image = image
+        self.current_sector = 0
+        self.current_track = 0
+
+    def translate_sector(self, logical_sector):
+        return self.image.translate_sector(logical_sector)
+
+    def read_sector(self):
+        sector = self.image.get_sector(self.current_sector, self.current_track)
+        return bytes(sector)
+
+    def write_sector(self, data):
+        assert len(data) == SECTOR_SIZE
+        sector = self.image.get_sector(self.current_sector, self.current_track)
+        sector[:] = data
+
+
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
@@ -108,9 +127,7 @@ class CPMMachineMixin(object):
             csv_scratch_pad.to_bytes(2, 'little') +
             alv_scratch_pad.to_bytes(2, 'little'))
 
-        self.__disk = DiskImage(f)
-        self.__disk_track = 0
-        self.__disk_sector = 0
+        self.__drive = DiskDrive(DiskImage(f))
 
     @staticmethod
     def __load_data(path):
@@ -214,7 +231,7 @@ class CPMMachineMixin(object):
         assert 0  # TODO
 
     def home_disk_home(self):
-        self.__disk_track = 0
+        self.__drive.current_track = 0
 
     def seldsk_select_disk(self):
         DISK_A = 0
@@ -225,29 +242,29 @@ class CPMMachineMixin(object):
         self.hl = 0
 
     def settrk_set_track(self):
-        self.__disk_track = self.bc
+        self.__drive.current_track = self.bc
 
     def setsec_set_sector(self):
-        self.__disk_sector = self.bc
+        self.__drive.current_sector = self.bc
 
     def setdma_set_dma(self):
         self.__dma = self.bc
 
     def read_disk(self):
-        data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
+        data = self.__drive.read_sector()
         self.memory[self.__dma:self.__dma + SECTOR_SIZE] = data
         self.a = 0  # Read OK.
 
     def write_disk(self):
-        data = self.__disk.get_sector(self.__disk_sector, self.__disk_track)
-        data[:] = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
+        data = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
+        self.__drive.write_sector(data)
         self.a = 0  # Write OK.
 
     def listst_list_status(self):
         assert 0  # TODO
 
     def sectran_sector_translate(self):
-        self.hl = self.__disk.translate_sector(self.bc)
+        self.hl = self.__drive.translate_sector(self.bc)
 
     def handle_breakpoint(self):
         v = self.__bios_vectors.get(self.pc)
