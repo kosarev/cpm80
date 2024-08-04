@@ -11,7 +11,7 @@ $ pip install cpm80
 
 ## Running and terminating
 
-```shell
+```
 $ cpm80
 
 A>save 1 dump.dat
