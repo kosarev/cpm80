@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import inspect
+import os
 import setuptools
 
 
-''' TODO
 here = os.path.abspath(os.path.dirname(inspect.getsource(lambda: 0)))
 
 with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
-'''
 
 
 setuptools.setup(
     name='cpm80',
     version='1.0a1',
     description='CP/M-80 emulator',
-    # TODO: long_description=long_description,
-    # TODO: long_description_content_type='text/markdown',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Ivan Kosarev',
     author_email='mail@ivankosarev.com',
     url='https://github.com/kosarev/cpm80',
