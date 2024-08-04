@@ -52,7 +52,7 @@ class DiskImage(object):
         return self.format.translate_sector(logical_sector)
 
 
-class _CPMMachineMixin(object):
+class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
     __TPA = 0x0100
@@ -265,10 +265,10 @@ class _CPMMachineMixin(object):
                 break
 
 
-class I8080CPMMachine(_CPMMachineMixin, z80.I8080Machine):
+class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
     def __init__(self):
         z80.I8080Machine.__init__(self)
-        _CPMMachineMixin.__init__(self)
+        CPMMachineMixin.__init__(self)
 
 
 def main():
