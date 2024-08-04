@@ -47,3 +47,13 @@ m = cpm80.I8080CPMMachine(console_reader=console_reader)
 m.run()
 ```
 [string_keyboard.py](https://github.com/kosarev/cpm80/blob/master/examples/string_keyboard.py)
+
+Output:
+```
+A>dir
+NO FILE
+A>save 1 a.dat
+A>dir
+A: A        DAT
+A>
+```
