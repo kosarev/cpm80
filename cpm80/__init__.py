@@ -58,6 +58,10 @@ class DiskDrive(object):
         self.current_sector = 0
         self.current_track = 0
 
+    @property
+    def format(self):
+        return self.image.format
+
     def translate_sector(self, logical_sector):
         return self.image.translate_sector(logical_sector)
 
@@ -137,7 +141,8 @@ class CPMMachineMixin(object):
         return addr
 
     def __set_up_disk_tables(self):
-        f = DiskFormat()
+        self.__drive = DiskDrive(DiskImage(DiskFormat()))
+        f = self.__drive.format
 
         # Shared by all identical drives.
         dpb_disk_param_block = self.__allocate_disk_table_block(
@@ -173,8 +178,6 @@ class CPMMachineMixin(object):
             dpb_disk_param_block.to_bytes(2, 'little') +
             csv_scratch_pad.to_bytes(2, 'little') +
             alv_scratch_pad.to_bytes(2, 'little'))
-
-        self.__drive = DiskDrive(DiskImage(f))
 
     @staticmethod
     def __load_data(path):
