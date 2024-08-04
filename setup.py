@@ -15,7 +15,7 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 setuptools.setup(
     name='cpm80',
     version='1.0a2',
-    description='CP/M-80 emulator',
+    description='CP/M-80 2.2 emulator',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='Ivan Kosarev',
