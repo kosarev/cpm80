@@ -108,8 +108,8 @@ class KeyboardDevice(object):
 
 
 class StringKeyboard(object):
-    def __init__(self, input):
-        self.__input = input
+    def __init__(self, *commands):
+        self.__input = '\n'.join(commands) + '\n'
         self.__i = 0
 
     def input(self):
