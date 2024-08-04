@@ -48,26 +48,6 @@ class _CPMMachineMixin(object):
     __TPA = 0x0100
 
     __BIOS_BASE = 0xaa00
-
-    __BIOS_COLD_BOOT = 0
-    __BIOS_WARM_BOOT = 1
-    __BIOS_CONSOLE_STATUS = 2
-    __BIOS_CONSOLE_INPUT = 3
-    __BIOS_CONSOLE_OUTPUT = 4
-    __BIOS_LIST_OUTPUT = 5
-    __BIOS_PUNCH_OUTPUT = 6
-    __BIOS_READER_INPUT = 7
-    __BIOS_DISK_HOME = 8
-    __BIOS_SELECT_DISK = 9
-    __BIOS_SET_TRACK = 10
-    __BIOS_SET_SECTOR = 11
-    __BIOS_SET_DMA = 12
-    __BIOS_READ_DISK = 13
-    __BIOS_WRITE_DISK = 14
-    __BIOS_LIST_STATUS = 15
-    __BIOS_SECTOR_TRANSLATE = 16
-    __BIOS_NUM_VECTORS = 17
-
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
     def __init__(self):
@@ -134,9 +114,31 @@ class _CPMMachineMixin(object):
         JMP_BIOS = JMP + self.__BIOS_BASE.to_bytes(2, 'little')
         self.set_memory_block(self.__REBOOT, JMP_BIOS)
 
-        for v in range(self.__BIOS_NUM_VECTORS):
-            addr = self.__BIOS_BASE + v * 3
-            self.set_memory_block(addr, b'\xc9')  # ret
+        BIOS_VECTORS = (
+            self.__cold_boot,
+            self.__warm_boot,
+            self.__console_status,
+            self.__console_input,
+            self.__console_output,
+            self.__list_output,
+            self.__punch_output,
+            self.__reader_input,
+            self.__disk_home,
+            self.__select_disk,
+            self.__set_track,
+            self.__set_sector,
+            self.__set_dma,
+            self.__read_disk,
+            self.__write_disk,
+            self.__list_status,
+            self.__sector_translate)
+
+        self.__bios_vectors = {}
+        for i, v in enumerate(BIOS_VECTORS):
+            addr = self.__BIOS_BASE + i * 3
+            self.__bios_vectors[addr] = v
+            RET = b'\xc9'
+            self.set_memory_block(addr, RET)
             self.set_breakpoint(addr)
 
         self.__disk_tables_heap = self.__BIOS_DISK_TABLES_HEAP_BASE
@@ -192,6 +194,15 @@ class _CPMMachineMixin(object):
         sys.stdout.write(chr(self.c))
         sys.stdout.flush()
 
+    def __list_output(self):
+        assert 0  # TODO
+
+    def __punch_output(self):
+        assert 0  # TODO
+
+    def __reader_input(self):
+        assert 0  # TODO
+
     def __disk_home(self):
         self.__disk_track = 0
 
@@ -222,6 +233,9 @@ class _CPMMachineMixin(object):
         data[:] = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
         self.a = 0  # Write OK.
 
+    def __list_status(self):
+        assert 0  # TODO
+
     def __sector_translate(self):
         translate_table = self.de
         assert translate_table == 0x0000
@@ -231,41 +245,9 @@ class _CPMMachineMixin(object):
         self.hl = physical_sector
 
     def __handle_breakpoint(self):
-        pc = self.pc
-        offset = pc - self.__BIOS_BASE
-        assert offset >= 0 and offset % 3 == 0
-
-        v = offset // 3
-        assert v < self.__BIOS_NUM_VECTORS
-
-        if v == self.__BIOS_COLD_BOOT:
-            self.__cold_boot()
-        elif v == self.__BIOS_WARM_BOOT:
-            self.__warm_boot()
-        elif v == self.__BIOS_CONSOLE_STATUS:
-            self.__console_status()
-        elif v == self.__BIOS_CONSOLE_INPUT:
-            self.__console_input()
-        elif v == self.__BIOS_CONSOLE_OUTPUT:
-            self.__console_output()
-        elif v == self.__BIOS_DISK_HOME:
-            self.__disk_home()
-        elif v == self.__BIOS_SELECT_DISK:
-            self.__select_disk()
-        elif v == self.__BIOS_SET_TRACK:
-            self.__set_track()
-        elif v == self.__BIOS_SET_SECTOR:
-            self.__set_sector()
-        elif v == self.__BIOS_SET_DMA:
-            self.__set_dma()
-        elif v == self.__BIOS_READ_DISK:
-            self.__read_disk()
-        elif v == self.__BIOS_WRITE_DISK:
-            self.__write_disk()
-        elif v == self.__BIOS_SECTOR_TRANSLATE:
-            self.__sector_translate()
-        else:
-            assert 0, f'hit BIOS vector {v}'
+        v = self.__bios_vectors.get(self.pc)
+        if v:
+            v()
 
     def run(self):
         while True:
