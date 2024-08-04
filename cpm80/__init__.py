@@ -14,7 +14,8 @@ class DiskFormat(object):
         self.bls_block_size = 2048
         self.spt_sectors_per_track = 40
         self.bsh_block_shift_factor = 4
-        self.blm_allocation_block_mask = 15  # = 2**BSH - 1.
+        self.blm_allocation_block_mask = 2**self.bsh_block_shift_factor - 1
+        assert self.blm_allocation_block_mask == 15
         self.exm_extent_mask = 1  # EXM = 1 and DSM < 256 means BLS = 2048.
         self.dsm_disk_size_max = 194  # In BLS units.
         self.drm_max_dir_entry = 63
