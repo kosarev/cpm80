@@ -103,6 +103,21 @@ class KeyboardDevice(object):
         return self.__ctrl_c_count >= 3
 
 
+class StringKeyboard(object):
+    def __init__(self, input):
+        self.__input = input
+        self.__i = 0
+
+    def input(self):
+        c = self.__input[self.__i]
+        self.__i += 1
+        return ord(c)
+
+    @property
+    def end_of_input(self):
+        return self.__i >= len(self.__input)
+
+
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
     __BDOS = 0x0005
@@ -111,8 +126,8 @@ class CPMMachineMixin(object):
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
-    def __init__(self):
-        self.__console_reader = KeyboardDevice()
+    def __init__(self, *, console_reader=None):
+        self.__console_reader = console_reader or KeyboardDevice()
         self.boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -294,13 +309,20 @@ class CPMMachineMixin(object):
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
-    def __init__(self):
+    def __init__(self, *, console_reader=None):
         z80.I8080Machine.__init__(self)
-        CPMMachineMixin.__init__(self)
+        CPMMachineMixin.__init__(self, console_reader=console_reader)
 
 
 def main():
-    m = I8080CPMMachine()
+    console_reader = None
+    ''' TODO: Turn into a test.
+    console_reader = StringKeyboard(
+        'dir\n'
+        'save 1 a.dat\n'
+        'dir\n\n')
+    '''
+    m = I8080CPMMachine(console_reader=console_reader)
     m.run()
 
 
