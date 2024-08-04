@@ -22,4 +22,4 @@ A>^C
 A>
 ```
 
-Press Ctrl-C three times to exit.
+Press <kbd>Ctrl</kbd> + <kbd>C</kbd> three times to exit.
