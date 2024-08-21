@@ -142,6 +142,7 @@ class CPMMachineMixin(object):
     __BDOS = 0x0005
     __TPA = 0x0100
 
+    __CCP_BASE = 0x9400
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
@@ -255,8 +256,8 @@ class CPMMachineMixin(object):
         self.on_wboot_warm_boot()
 
     def on_wboot_warm_boot(self):
-        self.set_memory_block(0x9400, self.__load_data('ccp.bin'))
-        self.pc = 0x9400
+        self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
+        self.pc = self.__CCP_BASE
 
     def on_const_console_status(self):
         self.a = 0
