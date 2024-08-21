@@ -171,7 +171,7 @@ class CPMMachineMixin(object):
 
         self.set_breakpoint(self.__CCP_PROCESS_COMMAND)
 
-        self.on_boot_cold_boot()
+        self.on_boot()
 
     def __allocate_disk_table_block(self, image):
         addr = self.__disk_tables_heap
@@ -221,7 +221,7 @@ class CPMMachineMixin(object):
     def __load_data(path):
         return importlib.resources.files('cpm80').joinpath(path).read_bytes()
 
-    def on_boot_cold_boot(self):
+    def on_boot(self):
         BDOS_BASE = 0x9c00
         self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
 
@@ -230,23 +230,23 @@ class CPMMachineMixin(object):
         self.set_memory_block(self.__REBOOT, JMP_BIOS)
 
         BIOS_VECTORS = (
-            self.on_boot_cold_boot,
-            self.on_wboot_warm_boot,
-            self.on_const_console_status,
-            self.on_conin_console_input,
-            self.on_conout_console_output,
-            self.on_list_output,
-            self.on_punch_output,
-            self.on_reader_input,
-            self.on_home_disk_home,
-            self.on_seldsk_select_disk,
-            self.on_settrk_set_track,
-            self.on_setsec_set_sector,
-            self.on_setdma_set_dma,
-            self.on_read_disk,
-            self.on_write_disk,
-            self.on_listst_list_status,
-            self.on_sectran_sector_translate)
+            self.on_boot,
+            self.on_wboot,
+            self.on_const,
+            self.on_conin,
+            self.on_conout,
+            self.on_list,
+            self.on_punch,
+            self.on_reader,
+            self.on_home,
+            self.on_seldsk,
+            self.on_settrk,
+            self.on_setsec,
+            self.on_setdma,
+            self.on_read,
+            self.on_write,
+            self.on_listst,
+            self.on_sectran)
 
         self.__bios_vectors = {}
         for i, v in enumerate(BIOS_VECTORS):
@@ -273,17 +273,17 @@ class CPMMachineMixin(object):
                               CURRENT_DISK.to_bytes(1, 'little'))
 
         self.c = CURRENT_DISK
-        self.on_wboot_warm_boot()
+        self.on_wboot()
 
-    def on_wboot_warm_boot(self):
+    def on_wboot(self):
         self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
         self.pc = self.__CCP_BASE
 
-    def on_const_console_status(self):
+    def on_const(self):
         # TODO
         self.a = 0
 
-    def on_conin_console_input(self):
+    def on_conin(self):
         c = self.__console_reader.input()
         if c is None:
             self.__done = True
@@ -291,22 +291,22 @@ class CPMMachineMixin(object):
 
         self.a = c
 
-    def on_conout_console_output(self):
+    def on_conout(self):
         self.__console_writer.output(self.c)
 
-    def on_list_output(self):
+    def on_list(self):
         assert 0  # TODO
 
-    def on_punch_output(self):
+    def on_punch(self):
         assert 0  # TODO
 
-    def on_reader_input(self):
+    def on_reader(self):
         assert 0  # TODO
 
-    def on_home_disk_home(self):
+    def on_home(self):
         self.__drive.current_track = 0
 
-    def on_seldsk_select_disk(self):
+    def on_seldsk(self):
         DISK_A = 0
         if self.c == DISK_A:
             self.hl = self.__disk_header_table
@@ -314,28 +314,28 @@ class CPMMachineMixin(object):
 
         self.hl = 0
 
-    def on_settrk_set_track(self):
+    def on_settrk(self):
         self.__drive.current_track = self.bc
 
-    def on_setsec_set_sector(self):
+    def on_setsec(self):
         self.__drive.current_sector = self.bc
 
-    def on_setdma_set_dma(self):
+    def on_setdma(self):
         self.__dma = self.bc
 
-    def on_read_disk(self):
+    def on_read(self):
         self.set_memory_block(self.__dma, self.__drive.read_sector())
         self.a = 0  # Read OK.
 
-    def on_write_disk(self):
+    def on_write(self):
         data = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
         self.__drive.write_sector(data)
         self.a = 0  # Write OK.
 
-    def on_listst_list_status(self):
+    def on_listst(self):
         assert 0  # TODO
 
-    def on_sectran_sector_translate(self):
+    def on_sectran(self):
         self.hl = self.__drive.translate_sector(self.bc)
 
     def on_breakpoint(self):
