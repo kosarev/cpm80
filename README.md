@@ -87,3 +87,20 @@ m.run()
 print(d.string)
 ```
 [string_display.py](https://github.com/kosarev/cpm80/blob/master/examples/string_display.py)
+
+
+## Making BDOS calls
+
+BDOS calls can be performed on the machine object directly or by
+using convenience wrappers.
+
+```python3
+m = cpm80.I8080CPMMachine()
+
+STR_ADDR = 0x100
+m.set_memory_block(STR_ADDR, b'Hello $')
+m.bdos_call(m.C_WRITESTR, de=STR_ADDR)
+
+m.write_str('World!\n')
+```
+[bdos_call.py](https://github.com/kosarev/cpm80/blob/master/examples/bdos_call.py)

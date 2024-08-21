@@ -139,10 +139,14 @@ class StringDisplay(object):
 
 class CPMMachineMixin(object):
     __REBOOT = 0x0000
-    __BDOS = 0x0005
     __TPA = 0x0100
 
+    BDOS_ENTRY = 0x0005
+    C_WRITESTR = 9
+
     __CCP_BASE = 0x9400
+    __CCP_PROCESS_COMMAND = __CCP_BASE + 0x385
+
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
@@ -150,6 +154,9 @@ class CPMMachineMixin(object):
         self.__console_reader = console_reader or KeyboardDevice()
         self.__console_writer = console_writer or DisplayDevice()
         self.__done = False
+
+        self.set_breakpoint(self.__CCP_PROCESS_COMMAND)
+
         self.on_boot_cold_boot()
 
     def __allocate_disk_table_block(self, image):
@@ -245,7 +252,7 @@ class CPMMachineMixin(object):
 
         BDOS_ENTRY = BDOS_BASE + 0x11
         JMP_BDOS = JMP + BDOS_ENTRY.to_bytes(2, 'little')
-        self.set_memory_block(self.__BDOS, JMP_BDOS)
+        self.set_memory_block(self.BDOS_ENTRY, JMP_BDOS)
 
         CURRENT_DISK = 0
         CURRENT_DISK_ADDR = 0x0004
@@ -260,6 +267,7 @@ class CPMMachineMixin(object):
         self.pc = self.__CCP_BASE
 
     def on_const_console_status(self):
+        # TODO
         self.a = 0
 
     def on_conin_console_input(self):
@@ -322,10 +330,42 @@ class CPMMachineMixin(object):
         if v:
             v()
 
+    # TODO: Should be implemented in the CPU package.
+    def __push(self, nn):
+        self.sp = (self.sp - 1) & 0xffff
+        self.memory[self.sp] = (nn >> 8) & 0xff
+        self.sp = (self.sp - 1) & 0xffff
+        self.memory[self.sp] = (nn >> 0) & 0xff
+
+    def __reach_ccp_command_processing(self):
+        while self.pc != self.__CCP_PROCESS_COMMAND:
+            events = super().run()
+            if events & self._BREAKPOINT_HIT:
+                self.on_breakpoint()
+
+    def bdos_call(self, entry, *, de=None):
+        # Make sure CCP got control and initialised the system.
+        self.__reach_ccp_command_processing()
+
+        self.c = entry
+        if de is not None:
+            self.de = de
+        self.__push(self.__CCP_PROCESS_COMMAND)
+        self.pc = self.BDOS_ENTRY
+
+        # Execute the call.
+        self.__reach_ccp_command_processing()
+
+    def write_str(self, s, *, addr=None):
+        if addr is None:
+            addr = self.__TPA
+        s = s.encode() + b'$'
+        self.set_memory_block(addr, s)
+        self.bdos_call(self.C_WRITESTR, de=addr)
+
     def run(self):
         while not self.__done:
             events = super().run()
-
             if events & self._BREAKPOINT_HIT:
                 self.on_breakpoint()
 
