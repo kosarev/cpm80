@@ -104,3 +104,24 @@ m.bdos_call(m.C_WRITESTR, de=STR_ADDR)
 m.write_str('World!\n')
 ```
 [bdos_call.py](https://github.com/kosarev/cpm80/blob/master/examples/bdos_call.py)
+
+
+## Working with files
+
+Similarly, using BDOS wrappers one can manipulate files on disks.
+
+```python3
+drive = cpm80.DiskDrive()
+
+m = cpm80.I8080CPMMachine(drive=drive)
+m.make_file('file.txt')
+m.write_file(f'bin(100) is {bin(100)}\n'.encode())
+m.close_file()
+del m
+
+# Show the written contents of the file using another machine.
+console_reader = cpm80.StringKeyboard('type file.txt')
+m = cpm80.I8080CPMMachine(drive=drive, console_reader=console_reader)
+m.run()
+```
+[make_file.py](https://github.com/kosarev/cpm80/blob/master/examples/make_file.py)

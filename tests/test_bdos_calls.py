@@ -17,3 +17,16 @@ def test_s_bdosver():
     CPM_TYPE_PLAIN = 0
     assert m.get_bdos_version() == (CPM_VERSION_2_2, MACHINE_TYPE_8080,
                                     CPM_TYPE_PLAIN)
+
+
+def test_file_funcs():
+    m = cpm80.I8080CPMMachine()
+    m.make_file('file.bin')
+    m.write_file(b'abc')
+    m.close_file()
+
+    # TODO: Test reading it back.
+
+    # TODO: Test renaming the file.
+
+    # TODO: Test deleting the file.
