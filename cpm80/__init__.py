@@ -143,6 +143,7 @@ class CPMMachineMixin(object):
 
     BDOS_ENTRY = 0x0005
     C_WRITESTR = 9
+    S_BDOSVER = 12
 
     __CCP_BASE = 0x9400
     __CCP_PROCESS_COMMAND = __CCP_BASE + 0x385
@@ -362,6 +363,16 @@ class CPMMachineMixin(object):
         s = s.encode() + b'$'
         self.set_memory_block(addr, s)
         self.bdos_call(self.C_WRITESTR, de=addr)
+
+    def get_bdos_version(self):
+        self.bdos_call(self.S_BDOSVER)
+        system_type = self.b
+        cpm_version = self.a
+
+        cpm_type = (system_type >> 0) & 0xf
+        machine_type = (system_type >> 4) & 0xf
+
+        return cpm_version, cpm_type, machine_type
 
     def run(self):
         while not self.__done:
