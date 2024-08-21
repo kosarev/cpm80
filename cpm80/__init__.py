@@ -457,6 +457,7 @@ class CPMMachineMixin(object):
             cr_current_record.to_bytes(1, 'little') +
             r0 + r1 + r2)
 
+        # TODO: Before calling this, make sure the file doesn't exist.
         self.bdos_call(self.F_MAKE, de=FCB)
 
         dir_code = self.a
