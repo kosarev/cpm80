@@ -66,6 +66,11 @@ class DiskFormat(object):
 
 DISK_FORMATS = {
     'default': DiskFormat(),
+
+    # Also used on Orion 128 machines. The number of blocks is
+    # one less than it could be, likely due to a mistake, so the
+    # last block is never used.
+    'korvet': DiskFormat(num_reserved_tracks=4, num_blocks=389),
 }
 
 
