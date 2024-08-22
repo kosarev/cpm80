@@ -14,20 +14,21 @@ class Error(BaseException):
 
 
 class DiskFormat(object):
-    def __init__(self):
+    def __init__(self, *, sectors_per_track=40, num_reserved_tracks=0,
+                 block_size=2048, num_blocks=400, num_dir_entries=128):
         def _div_ceil(a, b):
             return -(a // -b)
 
-        self.sectors_per_track = 40
-        self.num_reserved_tracks = 0
-        self.block_size = 2048
-        self.num_blocks = 400
-        self.num_dir_entries = 128
+        if block_size not in (1024, 2048, 4096, 8192, 16384):
+            raise Error(f'unsupported block size ({block_size})')
+
+        self.sectors_per_track = sectors_per_track
+        self.num_reserved_tracks = num_reserved_tracks
+        self.block_size = block_size
+        self.num_blocks = num_blocks
+        self.num_dir_entries = num_dir_entries
         self.skew_factor = 0  # No translation.
         self.removable = True
-
-        if self.block_size not in (1024, 2048, 4096, 8192, 16384):
-            raise Error(f'unsupported block size ({self.block_size})')
 
         # CP/M Disk Parameter Block Fields.
         self.bls_block_size = self.block_size
@@ -61,6 +62,11 @@ class DiskFormat(object):
         assert self.skew_factor == 0
         physical_sector = logical_sector
         return physical_sector
+
+
+DISK_FORMATS = {
+    'default': DiskFormat(),
+}
 
 
 class DiskImage(object):
