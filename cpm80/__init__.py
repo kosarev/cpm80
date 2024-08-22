@@ -19,10 +19,10 @@ class DiskFormat(object):
             return -(a // -b)
 
         self.sectors_per_track = 40
-        self.num_reserved_tracks = 2
+        self.num_reserved_tracks = 0
         self.block_size = 2048
-        self.num_blocks = 195
-        self.num_dir_entries = 64
+        self.num_blocks = 400
+        self.num_dir_entries = 128
         self.skew_factor = 0  # No translation.
         self.removable = True
 
