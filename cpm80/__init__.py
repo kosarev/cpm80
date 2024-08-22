@@ -15,24 +15,46 @@ class Error(BaseException):
 
 class DiskFormat(object):
     def __init__(self):
-        self.bls_block_size = 2048
-        self.spt_sectors_per_track = 40
-        self.bsh_block_shift_factor = 4
-        self.blm_allocation_block_mask = 2**self.bsh_block_shift_factor - 1
-        assert self.blm_allocation_block_mask == 15
-        self.exm_extent_mask = 1  # EXM = 1 and DSM < 256 means BLS = 2048.
-        self.dsm_disk_size_max = 194  # In BLS units.
-        self.drm_max_dir_entry = 63
-        self.al0_allocation_mask = 128  # 1 block for 64 dirs, 32 bytes each.
-        self.al1_allocation_mask = 0
-        self.cks_directory_check_size = 16
-        self.off_system_tracks_offset = 2
-        self.removable = True
-        self.skew_factor = 0  # No translation.
+        def _div_ceil(a, b):
+            return -(a // -b)
 
-        self.disk_size = ((self.dsm_disk_size_max + 1) * self.bls_block_size +
-                          (self.off_system_tracks_offset *
-                           self.spt_sectors_per_track * SECTOR_SIZE))
+        self.sectors_per_track = 40
+        self.num_reserved_tracks = 2
+        self.block_size = 2048
+        self.num_blocks = 195
+        self.num_dir_entries = 64
+        self.skew_factor = 0  # No translation.
+        self.removable = True
+
+        if self.block_size not in (1024, 2048, 4096, 8192, 16384):
+            raise Error(f'unsupported block size ({self.block_size})')
+
+        # CP/M Disk Parameter Block Fields.
+        self.bls_block_size = self.block_size
+        self.spt_sectors_per_track = self.sectors_per_track
+        self.bsh_block_shift_factor = self.block_size.bit_length() - 8
+        self.blm_allocation_block_mask = 2**self.bsh_block_shift_factor - 1
+        self.dsm_disk_size_max = self.num_blocks - 1
+        self.exm_extent_mask = (self.blm_allocation_block_mask >> 3
+                                if self.dsm_disk_size_max < 0x100
+                                else self.blm_allocation_block_mask >> 4)
+        self.drm_max_dir_entry = self.num_dir_entries - 1
+        self.cks_directory_check_size = (self.num_dir_entries // 4
+                                         if self.removable else 0)
+        self.off_system_tracks_offset = self.num_reserved_tracks
+
+        DIR_ENTRY_SIZE = 32
+        num_dir_blocks = _div_ceil(self.num_dir_entries * DIR_ENTRY_SIZE,
+                                   self.block_size)
+        dir_alloc_mask = (0xffff >> num_dir_blocks) ^ 0xffff
+        self.al0_allocation_mask = (dir_alloc_mask >> 8) & 0xff
+        self.al1_allocation_mask = (dir_alloc_mask >> 0) & 0xff
+
+        num_reserved_blocks = _div_ceil((self.num_reserved_tracks *
+                                         self.sectors_per_track * SECTOR_SIZE),
+                                        self.block_size)
+        total_num_blocks = num_reserved_blocks + self.num_blocks
+        self.disk_size = total_num_blocks * self.block_size
 
     def translate_sector(self, logical_sector):
         # TODO: Support arbitrary skew factors.
@@ -506,6 +528,8 @@ def main(args=None):
     try:
         m = I8080CPMMachine(console_reader=console_reader)
         m.run()
+    except AssertionError as e:
+        raise e
     except Exception as e:
         sys.exit(f'cpm80: {e}')
 
