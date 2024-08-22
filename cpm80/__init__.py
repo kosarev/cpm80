@@ -9,6 +9,10 @@ import z80
 SECTOR_SIZE = 128
 
 
+class Error(BaseException):
+    pass
+
+
 class DiskFormat(object):
     def __init__(self):
         self.bls_block_size = 2048
@@ -412,8 +416,7 @@ class CPMMachineMixin(object):
 
             self.bdos_call(self.F_WRITE, de=self.__DEFAULT_FCB)
             if self.a != 0:
-                # TODO: Cannot write file.
-                assert 0
+                raise Error(f'cannot write file: F_WRITE returned {self.a}')
 
     # TODO: Support custom FCB addresses, explicit drive
     # specification, file attributes, etc.
@@ -500,8 +503,11 @@ def main(args=None):
     else:
         console_reader = StringKeyboard(*args.commands)
 
-    m = I8080CPMMachine(console_reader=console_reader)
-    m.run()
+    try:
+        m = I8080CPMMachine(console_reader=console_reader)
+        m.run()
+    except Exception as e:
+        sys.exit(f'cpm80: {e}')
 
 
 if __name__ == '__main__':
