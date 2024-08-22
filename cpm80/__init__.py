@@ -26,7 +26,9 @@ class DiskFormat(object):
         self.removable = True
         self.skew_factor = 0  # No translation.
 
-        self.disk_size = (self.dsm_disk_size_max + 1) * self.bls_block_size
+        self.disk_size = ((self.dsm_disk_size_max + 1) * self.bls_block_size +
+                          (self.off_system_tracks_offset *
+                           self.spt_sectors_per_track * SECTOR_SIZE))
 
     def translate_sector(self, logical_sector):
         # TODO: Support arbitrary skew factors.
