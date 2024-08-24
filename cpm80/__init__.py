@@ -20,7 +20,11 @@ class DiskFormat(object):
             return -(a // -b)
 
         if block_size not in (1024, 2048, 4096, 8192, 16384):
-            raise Error(f'unsupported block size ({block_size})')
+            raise Error(f'invalid block size ({block_size})')
+
+        if block_size == 1024 and num_blocks > 0x100:
+            raise Error('block size 1024 is not valid for disks with '
+                        'more than 0x100 blocks')
 
         self.sectors_per_track = sectors_per_track
         self.num_reserved_tracks = num_reserved_tracks
