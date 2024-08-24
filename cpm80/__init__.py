@@ -458,6 +458,8 @@ class CPMMachineMixin(object):
     # TODO: Support custom FCB addresses, explicit drive
     # specification, file attributes, etc.
     # TODO: Throw cpm80 exceptions on problematic input.
+    # TODO: Prohibit wildcards.
+    # TODO: Delete existing files before creating new ones.
     def make_file(self, filename):
         filename, type = filename.split('.', maxsplit=1)
 
