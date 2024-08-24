@@ -538,7 +538,7 @@ def main(args=None):
     args = parser.parse_args(args)
 
     if args.commands is None:
-        console_reader = KeyboardDevice()
+        console_reader = None
     else:
         console_reader = StringKeyboard(*args.commands)
 
