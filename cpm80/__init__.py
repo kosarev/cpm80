@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
+import appdirs
+import argparse
 import importlib.resources
+import pathlib
 import sys
 import termios
 import tty
@@ -86,13 +89,13 @@ class DiskImage(object):
         self.format = format
 
         size = format.disk_size
-        self.image = bytearray(size)
-        self.image[:] = b'\xe5' * size
+        self.data = bytearray(size)
+        self.data[:] = b'\xe5' * size
 
     def get_sector(self, sector, track):
         sector_index = sector + track * self.format.spt_sectors_per_track
         offset = sector_index * SECTOR_SIZE
-        return memoryview(self.image)[offset:offset + SECTOR_SIZE]
+        return memoryview(self.data)[offset:offset + SECTOR_SIZE]
 
     def translate_sector(self, logical_sector):
         return self.format.translate_sector(logical_sector)
@@ -531,24 +534,41 @@ class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
 
 
 def main(args=None):
-    import argparse
     parser = argparse.ArgumentParser(description='CP/M-80 2.2 emulator.')
+    parser.add_argument('--temp-disk', action='store_true',
+                        help='do not load the default disk image')
     parser.add_argument('-c', '--commands', metavar='CMD', type=str, nargs='+',
                         help='run commands as if they were typed in manually')
     args = parser.parse_args(args)
 
-    if args.commands is None:
-        console_reader = None
-    else:
+    console_reader = None
+    if args.commands is not None:
         console_reader = StringKeyboard(*args.commands)
 
+    app_dirs = appdirs.AppDirs('cpm80')
+    data_dir = pathlib.Path(app_dirs.user_data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    disk_path = data_dir / 'disk.img'
+    image = DiskImage()
+    if not args.temp_disk:
+        try:
+            image.data[:] = disk_path.read_bytes()
+        except FileNotFoundError:
+            pass
+
+    drive = DiskDrive(image)
+
     try:
-        m = I8080CPMMachine(console_reader=console_reader)
+        m = I8080CPMMachine(drive=drive, console_reader=console_reader)
         m.run()
     except AssertionError as e:
         raise e
     except Exception as e:
         sys.exit(f'cpm80: {e}')
+
+    if not args.temp_disk:
+        disk_path.write_bytes(image.data)
 
 
 if __name__ == '__main__':

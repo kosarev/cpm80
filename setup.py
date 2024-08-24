@@ -23,7 +23,7 @@ setuptools.setup(
     url='https://github.com/kosarev/cpm80',
     license='MIT',
     packages=['cpm80'],
-    install_requires=['z80'],
+    install_requires=['z80', 'appdirs'],
     package_data={'cpm80': ['*.bin']},
     entry_points={
         'console_scripts': [
