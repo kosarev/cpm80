@@ -125,4 +125,4 @@ m.open_file('file.txt')
 print(m.read_file())
 m.close_file()
 ```
-[make_file.py](https://github.com/kosarev/cpm80/blob/master/examples/make_file.py)
+[doing_files.py](https://github.com/kosarev/cpm80/blob/master/examples/doing_files.py)
