@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import cpm80
+import pytest
 
 
 def test_c_writestr(capsys):
@@ -19,7 +20,7 @@ def test_s_bdosver():
                                     CPM_TYPE_PLAIN)
 
 
-def test_file_funcs():
+def test_file_read_write():
     m = cpm80.I8080CPMMachine()
     m.make_file('file.bin')
     m.write_file(b'abc')
@@ -30,6 +31,21 @@ def test_file_funcs():
     assert m.read_file() == b'abc' + b'\x1a' * (cpm80.SECTOR_SIZE - 3)
     m.close_file()
 
-    # TODO: Test renaming the file.
+
+def test_file_rename():
+    m = cpm80.I8080CPMMachine()
+    m.make_file('file.bin')
+    m.close_file()
+
+    with pytest.raises(cpm80.Error):
+        m.rename_file('xfile.bin', 'file2.bin')
+
+    m.rename_file('file.bin', 'file2.bin')
+
+    with pytest.raises(cpm80.Error):
+        m.open_file('file.bin')
+
+    m.open_file('file2.bin')
+    assert m.read_file() == b''
 
     # TODO: Test deleting the file.

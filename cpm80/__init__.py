@@ -202,6 +202,7 @@ class CPMMachineMixin(object):
     F_READ = 0x14
     F_WRITE = 0x15
     F_MAKE = 0x16
+    F_RENAME = 0x17
     F_DMAOFF = 0x1a
 
     __CCP_BASE = 0x9400
@@ -546,6 +547,23 @@ class CPMMachineMixin(object):
         if dir_code == 0xff:
             # TODO: No more directory space is available.
             assert 0
+
+        return dir_code
+
+    # TODO: Support custom FCB addresses, explicit drive
+    # specification, file attributes, etc.
+    # TODO: Prohibit wildcards?
+    def rename_file(self, old, new):
+        FCB = self.__DEFAULT_FCB
+        self.set_memory_block(FCB, (self.__make_fcb(old)[:16] +
+                                    self.__make_fcb(new)[:16]))
+
+        self.bdos_call(self.F_RENAME, de=FCB)
+
+        dir_code = self.a
+        if dir_code == 0xff:
+            raise Error(f'cannot open file: F_RENAME returned {dir_code}: '
+                        'file not found')
 
         return dir_code
 
