@@ -25,7 +25,10 @@ def test_file_funcs():
     m.write_file(b'abc')
     m.close_file()
 
-    # TODO: Test reading it back.
+    m.open_file('file.bin')
+    assert m.read_file(0) == b''
+    assert m.read_file() == b'abc' + b'\x1a' * (cpm80.SECTOR_SIZE - 3)
+    m.close_file()
 
     # TODO: Test renaming the file.
 

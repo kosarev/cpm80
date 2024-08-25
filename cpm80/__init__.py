@@ -197,7 +197,9 @@ class CPMMachineMixin(object):
     BDOS_ENTRY = 0x0005
     C_WRITESTR = 9
     S_BDOSVER = 0xc
+    F_OPEN = 0xf
     F_CLOSE = 0x10
+    F_READ = 0x14
     F_WRITE = 0x15
     F_MAKE = 0x16
     F_DMAOFF = 0x1a
@@ -432,38 +434,7 @@ class CPMMachineMixin(object):
 
         return cpm_version, cpm_type, machine_type
 
-    # TODO: Support custom FCB addresses.
-    def close_file(self):
-        self.bdos_call(self.F_CLOSE, de=self.__DEFAULT_FCB)
-        dir_code = self.a
-        if dir_code == 0xff:
-            # TODO: The filename cannot be found in the directory.
-            assert 0
-
-        return dir_code
-
-    # TODO: Support custom FCB and DMA addresses.
-    def write_file(self, data):
-        DMA = self.__TPA
-        self.set_dma(DMA)
-
-        while data:
-            chunk = data[0:128]
-            data = data[128:]
-
-            chunk += b'\x1a' * (SECTOR_SIZE - len(chunk))
-            self.set_memory_block(DMA, chunk)
-
-            self.bdos_call(self.F_WRITE, de=self.__DEFAULT_FCB)
-            if self.a != 0:
-                raise Error(f'cannot write file: F_WRITE returned {self.a}')
-
-    # TODO: Support custom FCB addresses, explicit drive
-    # specification, file attributes, etc.
-    # TODO: Throw cpm80 exceptions on problematic input.
-    # TODO: Prohibit wildcards.
-    # TODO: Delete existing files before creating new ones.
-    def make_file(self, filename):
+    def __make_fcb(self, filename):
         filename, type = filename.split('.', maxsplit=1)
 
         DEFAULT_DRIVE = 0
@@ -490,19 +461,83 @@ class CPMMachineMixin(object):
         r1 = b'\x00'
         r2 = b'\x00'
 
+        return (drive.to_bytes(1, 'little') +
+                filename +
+                type +
+                extent.to_bytes(1, 'little') +
+                s1_reserved +
+                s2_reserved +
+                rc_record_count.to_bytes(1, 'little') +
+                d_reserved +
+                cr_current_record.to_bytes(1, 'little') +
+                r0 + r1 + r2)
+
+    # TODO: Support custom FCB addresses, explicit drive
+    # specification, file attributes, etc.
+    # TODO: Seems to support wildcards?
+    def open_file(self, filename):
         FCB = self.__DEFAULT_FCB
-        self.set_memory_block(
-            FCB,
-            drive.to_bytes(1, 'little') +
-            filename +
-            type +
-            extent.to_bytes(1, 'little') +
-            s1_reserved +
-            s2_reserved +
-            rc_record_count.to_bytes(1, 'little') +
-            d_reserved +
-            cr_current_record.to_bytes(1, 'little') +
-            r0 + r1 + r2)
+        self.set_memory_block(FCB, self.__make_fcb(filename))
+
+        self.bdos_call(self.F_OPEN, de=FCB)
+
+        dir_code = self.a
+        if dir_code == 0xff:
+            raise Error(f'cannot open file: F_OPEN returned {dir_code}: '
+                        'file not found')
+
+        return dir_code
+
+    # TODO: Support custom FCB addresses.
+    def close_file(self):
+        self.bdos_call(self.F_CLOSE, de=self.__DEFAULT_FCB)
+        dir_code = self.a
+        if dir_code == 0xff:
+            # TODO: The filename cannot be found in the directory.
+            assert 0
+
+        return dir_code
+
+    # TODO: Support custom FCB and DMA addresses.
+    def read_file(self, num_sectors=1):
+        DMA = self.__TPA
+        self.set_dma(DMA)
+
+        sectors = []
+        while len(sectors) < num_sectors:
+            self.bdos_call(self.F_READ, de=self.__DEFAULT_FCB)
+
+            if self.a != 0:
+                break
+
+            sectors.append(self.memory[DMA:DMA + SECTOR_SIZE])
+
+        return b''.join(sectors)
+
+    # TODO: Support custom FCB and DMA addresses.
+    def write_file(self, data):
+        DMA = self.__TPA
+        self.set_dma(DMA)
+
+        while data:
+            chunk = data[0:128]
+            data = data[128:]
+
+            chunk += b'\x1a' * (SECTOR_SIZE - len(chunk))
+            self.set_memory_block(DMA, chunk)
+
+            self.bdos_call(self.F_WRITE, de=self.__DEFAULT_FCB)
+            if self.a != 0:
+                raise Error(f'cannot write file: F_WRITE returned {self.a}')
+
+    # TODO: Support custom FCB addresses, explicit drive
+    # specification, file attributes, etc.
+    # TODO: Throw cpm80 exceptions on problematic input.
+    # TODO: Prohibit wildcards.
+    # TODO: Delete existing files before creating new ones.
+    def make_file(self, filename):
+        FCB = self.__DEFAULT_FCB
+        self.set_memory_block(FCB, self.__make_fcb(filename))
 
         # TODO: Before calling this, make sure the file doesn't exist.
         self.bdos_call(self.F_MAKE, de=FCB)

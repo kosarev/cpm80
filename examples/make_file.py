@@ -12,7 +12,8 @@ m.write_file(f'bin(100) is {bin(100)}\n'.encode())
 m.close_file()
 del m
 
-# Then print the contents of the file using another machine.
-console_reader = cpm80.StringKeyboard('type file.txt')
-m = cpm80.I8080CPMMachine(drive=drive, console_reader=console_reader)
-m.run()
+# Then read and print the contents of the file using another machine.
+m = cpm80.I8080CPMMachine(drive=drive)
+m.open_file('file.txt')
+print(m.read_file())
+m.close_file()
