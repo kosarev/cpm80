@@ -19,15 +19,14 @@ $ pip install cpm80
 ```
 $ cpm80
 
-A>save 1 dump.dat
+>save 1 dump.dat
 A>dir
 A: DUMP     DAT
-A>^C
-A>^C
-A>
+A>exit
 ```
 
-Press <kbd>Ctrl</kbd> + <kbd>C</kbd> three times to exit.
+Enter `exit` or just hit <kbd>Ctrl</kbd> + <kbd>C</kbd> three
+times to quit the emulator.
 
 
 ## Running commands automatically

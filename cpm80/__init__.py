@@ -206,7 +206,9 @@ class CPMMachineMixin(object):
     F_DMAOFF = 0x1a
 
     __CCP_BASE = 0x9400
-    __CCP_PROCESS_COMMAND = __CCP_BASE + 0x385
+    __CCP_READ_COMMAND = __CCP_BASE + 0x1aa
+    __CCP_GET_COMMAND = __CCP_BASE + 0x385
+    __CCP_RUN_COMMAND = __CCP_BASE + 0x398
 
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
@@ -218,7 +220,45 @@ class CPMMachineMixin(object):
         self.__console_writer = console_writer or DisplayDevice()
         self.__done = False
 
-        self.set_breakpoint(self.__CCP_PROCESS_COMMAND)
+        self.__breakpoints = {
+            self.__CCP_READ_COMMAND: self.on_read_ccp_command,
+            self.__CCP_GET_COMMAND: None,
+            self.__CCP_RUN_COMMAND: self.on_ccp_command,
+        }
+
+        BIOS_VECTORS = (
+            self.on_boot,
+            self.on_wboot,
+            self.on_const,
+            self.on_conin,
+            self.on_conout,
+            self.on_list,
+            self.on_punch,
+            self.on_reader,
+            self.on_home,
+            self.on_seldsk,
+            self.on_settrk,
+            self.on_setsec,
+            self.on_setdma,
+            self.on_read,
+            self.on_write,
+            self.on_listst,
+            self.on_sectran)
+
+        self.__bios_vectors = {}
+        for i, handler in enumerate(BIOS_VECTORS):
+            addr = self.__BIOS_BASE + i * 3
+
+            assert addr not in self.__bios_vectors
+            self.__bios_vectors[addr] = handler
+
+            assert addr not in self.__breakpoints
+            self.__breakpoints[addr] = handler
+
+        for addr in self.__breakpoints:
+            self.set_breakpoint(addr)
+
+        self.__ccp_command_line = None
 
         self.on_boot()
 
@@ -278,32 +318,9 @@ class CPMMachineMixin(object):
         JMP_BIOS = JMP + self.__BIOS_BASE.to_bytes(2, 'little')
         self.set_memory_block(self.__REBOOT, JMP_BIOS)
 
-        BIOS_VECTORS = (
-            self.on_boot,
-            self.on_wboot,
-            self.on_const,
-            self.on_conin,
-            self.on_conout,
-            self.on_list,
-            self.on_punch,
-            self.on_reader,
-            self.on_home,
-            self.on_seldsk,
-            self.on_settrk,
-            self.on_setsec,
-            self.on_setdma,
-            self.on_read,
-            self.on_write,
-            self.on_listst,
-            self.on_sectran)
-
-        self.__bios_vectors = {}
-        for i, v in enumerate(BIOS_VECTORS):
-            addr = self.__BIOS_BASE + i * 3
-            self.__bios_vectors[addr] = v
+        for addr in self.__bios_vectors:
             RET = b'\xc9'
             self.set_memory_block(addr, RET)
-            self.set_breakpoint(addr)
 
         self.__disk_tables_heap = self.__BIOS_DISK_TABLES_HEAP_BASE
         self.__set_up_disk_tables()
@@ -388,9 +405,9 @@ class CPMMachineMixin(object):
         self.hl = self.__drive.translate_sector(self.bc)
 
     def on_breakpoint(self):
-        v = self.__bios_vectors.get(self.pc)
-        if v:
-            v()
+        handler = self.__breakpoints.get(self.pc)
+        if handler:
+            handler()
 
     # TODO: Should be implemented in the CPU package.
     def __push(self, nn):
@@ -400,7 +417,7 @@ class CPMMachineMixin(object):
         self.memory[self.sp] = (nn >> 0) & 0xff
 
     def __reach_ccp_command_processing(self):
-        while self.pc != self.__CCP_PROCESS_COMMAND:
+        while self.pc != self.__CCP_GET_COMMAND:
             events = super().run()
             if events & self._BREAKPOINT_HIT:
                 self.on_breakpoint()
@@ -412,7 +429,7 @@ class CPMMachineMixin(object):
         self.c = entry
         if de is not None:
             self.de = de
-        self.__push(self.__CCP_PROCESS_COMMAND)
+        self.__push(self.__CCP_GET_COMMAND)
         self.pc = self.BDOS_ENTRY
 
         # Execute the call.
@@ -570,6 +587,22 @@ class CPMMachineMixin(object):
     def set_dma(self, dma):
         self.bdos_call(self.F_DMAOFF, de=dma)
 
+    def on_read_ccp_command(self):
+        assert self.pc == self.__CCP_READ_COMMAND
+
+        COMMAND_SIZE_ADDR = self.__CCP_BASE + 7
+        size = self.memory[COMMAND_SIZE_ADDR]
+
+        COMMAND_BUFF = COMMAND_SIZE_ADDR + 1
+        b = bytes(self.memory[COMMAND_BUFF:COMMAND_BUFF + size])
+        self.__ccp_command_line = b.decode('ascii')
+
+    def on_ccp_command(self):
+        assert self.pc == self.__CCP_RUN_COMMAND
+        command, *args = self.__ccp_command_line.split()
+        if command == 'exit':
+            self.__done = True
+
     def run(self):
         while not self.__done:
             events = super().run()
@@ -615,9 +648,7 @@ def main(args=None):
     try:
         m = I8080CPMMachine(drive=drive, console_reader=console_reader)
         m.run()
-    except AssertionError as e:
-        raise e
-    except Exception as e:
+    except Error as e:
         sys.exit(f'cpm80: {e}')
 
     if not args.temp_disk:
