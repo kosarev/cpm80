@@ -34,7 +34,7 @@ times to quit the emulator.
 From the command line:
 
 ```shell
-$ cpm80 -c dir 'save 1 a.dat' dir
+$ cpm80 dir 'save 1 a.dat' dir
 ```
 
 Alternatively, we can use the API's `StringKeyboard` class to

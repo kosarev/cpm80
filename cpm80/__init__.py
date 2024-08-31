@@ -623,8 +623,8 @@ def main(args=None):
     parser = argparse.ArgumentParser(description='CP/M-80 2.2 emulator.')
     parser.add_argument('--temp-disk', action='store_true',
                         help='do not load the default disk image')
-    parser.add_argument('-c', '--commands', metavar='CMD', type=str, nargs='+',
-                        help='run commands as if they were typed in manually')
+    parser.add_argument('commands', metavar='command', type=str, nargs='*',
+                        help='A CP/M or internal emulator command to execute.')
     args = parser.parse_args(args)
 
     console_reader = None
