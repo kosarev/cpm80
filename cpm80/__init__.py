@@ -17,8 +17,8 @@ class Error(BaseException):
 
 
 class DiskFormat(object):
-    def __init__(self, *, sectors_per_track=40, num_reserved_tracks=0,
-                 block_size=2048, num_blocks=400, num_dir_entries=128):
+    def __init__(self, *, sectors_per_track=40, num_reserved_tracks=2,
+                 block_size=2048, num_blocks=395, num_dir_entries=128):
         def _div_ceil(a, b):
             return -(a // -b)
 
@@ -34,12 +34,16 @@ class DiskFormat(object):
             num_reserved_tracks=num_reserved_tracks,
             block_size=block_size,
             num_blocks=num_blocks,
-            num_dir_entries=num_dir_entries,
-            skew_factor=0,  # No translation.
-            removable=True)
+            num_dir_entries=num_dir_entries)
 
         for param, value in self.params.items():
             self.__setattr__(param, value)
+
+        # TODO: Support arbitrary skew factors.
+        self.skew_factor = 0  # No translation.
+
+        # TODO: Support fixed drives.
+        self.removable = True
 
         # CP/M Disk Parameter Block Fields.
         self.bls_block_size = self.block_size
@@ -62,10 +66,10 @@ class DiskFormat(object):
         self.al0_allocation_mask = (dir_alloc_mask >> 8) & 0xff
         self.al1_allocation_mask = (dir_alloc_mask >> 0) & 0xff
 
-        num_reserved_blocks = _div_ceil((self.num_reserved_tracks *
-                                         self.sectors_per_track * SECTOR_SIZE),
-                                        self.block_size)
-        total_num_blocks = num_reserved_blocks + self.num_blocks
+        self.num_reserved_blocks = _div_ceil(
+            self.num_reserved_tracks * self.sectors_per_track * SECTOR_SIZE,
+            self.block_size)
+        total_num_blocks = self.num_reserved_blocks + self.num_blocks
         self.disk_size = total_num_blocks * self.block_size
 
     def __repr__(self):
@@ -73,7 +77,6 @@ class DiskFormat(object):
         return f'{__class__.__name__}({params})'
 
     def translate_sector(self, logical_sector):
-        # TODO: Support arbitrary skew factors.
         assert self.skew_factor == 0
         physical_sector = logical_sector
         return physical_sector
@@ -90,7 +93,7 @@ DISK_FORMATS = {
 
 
 class DiskImage(object):
-    def __init__(self, format=None):
+    def __init__(self, format=None, *, store_format=True):
         if format is None:
             format = DiskFormat()
 
@@ -99,6 +102,17 @@ class DiskImage(object):
         size = format.disk_size
         self.data = bytearray(size)
         self.data[:] = b'\xe5' * size
+
+        if store_format:
+            if self.format.num_reserved_blocks < 1:
+                raise Error('no space for storing disk format')
+
+            params = ' '.join(f'--{p}={int(v)}'
+                              for p, v in self.format.params.items())
+            id = (f"# cpm80 {params}\n"
+                  '# CP/M-80 2.2 emulator disk image\n'
+                  '# <https://github.com/kosarev/cpm80>\n')
+            self.data[:len(id)] = id.encode('ascii')
 
     def get_sector(self, sector, track):
         sector_index = sector + track * self.format.spt_sectors_per_track
@@ -645,17 +659,17 @@ def main(args=None):
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    disk_path = data_dir / 'disk.img'
-    image = DiskImage()
-    if not args.temp_disk:
-        try:
-            image.data[:] = disk_path.read_bytes()
-        except FileNotFoundError:
-            pass
-
-    drive = DiskDrive(image)
-
     try:
+        disk_path = data_dir / 'disk.img'
+        image = DiskImage()
+        if not args.temp_disk:
+            try:
+                image.data[:] = disk_path.read_bytes()
+            except FileNotFoundError:
+                pass
+
+        drive = DiskDrive(image)
+
         m = I8080CPMMachine(drive=drive, console_reader=console_reader)
         m.run()
     except Error as e:
