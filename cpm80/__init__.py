@@ -45,6 +45,9 @@ class DiskFormat(object):
         # TODO: Support fixed drives.
         self.removable = True
 
+        self.spec = tuple(f"--{p.replace('_', '-')}={int(v)}"
+                          for p, v in self.params.items())
+
         # CP/M Disk Parameter Block Fields.
         self.bls_block_size = self.block_size
         self.spt_sectors_per_track = self.sectors_per_track
@@ -76,6 +79,27 @@ class DiskFormat(object):
         params = ', '.join(f'{p}={v}' for p, v in self.params.items())
         return f'{__class__.__name__}({params})'
 
+    @staticmethod
+    def parse_spec(specs):
+        params = DiskFormat().params
+        for s in specs:
+            if not s.startswith('--'):
+                raise Error(f'invalid specifier {s}')
+
+            s, *v = s[2:].split('=', maxsplit=1)
+            p = s.replace('-', '_')
+            if p not in params:
+                raise Error(f'unknown parameter {s}')
+
+            if len(v) != 1:
+                raise Error(f'no value for parameter {s}')
+            v, = v
+
+            # TODO: Catch conversion errors.
+            params[p] = int(v)
+
+        return params
+
     def translate_sector(self, logical_sector):
         assert self.skew_factor == 0
         physical_sector = logical_sector
@@ -93,26 +117,42 @@ DISK_FORMATS = {
 
 
 class DiskImage(object):
-    def __init__(self, format=None, *, store_format=True):
-        if format is None:
-            format = DiskFormat()
-
+    def __init__(self, format, *, data=None, store_format=True):
         self.format = format
 
         size = format.disk_size
         self.data = bytearray(size)
         self.data[:] = b'\xe5' * size
 
+        if data is not None:
+            self.data[:] = data
+
         if store_format:
             if self.format.num_reserved_blocks < 1:
                 raise Error('no space for storing disk format')
 
-            params = ' '.join(f'--{p}={int(v)}'
-                              for p, v in self.format.params.items())
-            id = (f"# cpm80 {params}\n"
+            spec = ' '.join(self.format.spec)
+            id = (f'# cpm80 {spec}\n'
                   '# CP/M-80 2.2 emulator disk image\n'
                   '# <https://github.com/kosarev/cpm80>\n')
             self.data[:len(id)] = id.encode('ascii')
+
+    @staticmethod
+    def parse_header(data):
+        header = data.splitlines()[0].decode('ascii').split()
+        if not header or header.pop(0) != '#':
+            raise Error('no disk header')
+        if not header or header.pop(0) != 'cpm80':
+            raise Error('invalid disk header')
+
+        specs = []
+        while header:
+            s = header.pop(0)
+            if not s.startswith('--'):
+                break
+            specs.append(s)
+
+        return DiskFormat.parse_spec(specs)
 
     def get_sector(self, sector, track):
         sector_index = sector + track * self.format.spt_sectors_per_track
@@ -126,7 +166,7 @@ class DiskImage(object):
 class DiskDrive(object):
     def __init__(self, image=None):
         if image is None:
-            image = DiskImage()
+            image = DiskImage(DiskFormat())
 
         self.image = image
         self.current_sector = 0
@@ -661,13 +701,16 @@ def main(args=None):
 
     try:
         disk_path = data_dir / 'disk.img'
-        image = DiskImage()
+        disk_data = None
         if not args.temp_disk:
             try:
-                image.data[:] = disk_path.read_bytes()
+                disk_data = disk_path.read_bytes()
             except FileNotFoundError:
                 pass
 
+        params = (DiskFormat().params if disk_data is None
+                  else DiskImage.parse_header(disk_data))
+        image = DiskImage(DiskFormat(**params), data=disk_data)
         drive = DiskDrive(image)
 
         m = I8080CPMMachine(drive=drive, console_reader=console_reader)
