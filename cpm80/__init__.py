@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import appdirs
-import argparse
 import importlib.resources
 import pathlib
 import sys
@@ -683,17 +682,34 @@ class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
                                  console_writer=console_writer)
 
 
-def main(args=None):
-    parser = argparse.ArgumentParser(description='CP/M-80 2.2 emulator.')
-    parser.add_argument('--temp-disk', action='store_true',
-                        help='do not load the default disk image')
-    parser.add_argument('commands', metavar='command', type=str, nargs='*',
-                        help='A CP/M or internal emulator command to execute.')
-    args = parser.parse_args(args)
+def main(commands=None):
+    if commands is None:
+        commands = sys.argv[1:]
+
+    # TODO: Provide this functionality via a command.
+    if commands and commands[0] in ('--help', '-h'):
+        sys.exit(
+            'CP/M-80 2.2 emulator.\n'
+            'usage: cpm80 [--help] [--temp-disk] [COMMAND...]\n'
+            '\n'
+            'Options:\n'
+            '  --temp-disk    Do not load the default disk image.\n'
+            '\n'
+            'COMMAND is a CP/M or internal emulator command to execute\n'
+            'automatically before taking input from console.\n'
+            '\n'
+            'Internal commands:\n'
+            '  exit           Termiante emulation and quit.')
+
+    # TODO: Provide this functionality via a command.
+    temp_disk = False
+    if commands and commands[0] == '--temp-disk':
+        temp_disk = True
+        del commands[0]
 
     console_reader = None
-    if len(args.commands) > 0:
-        console_reader = StringKeyboard(*args.commands)
+    if commands:
+        console_reader = StringKeyboard(*commands)
 
     app_dirs = appdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
@@ -702,7 +718,7 @@ def main(args=None):
     try:
         disk_path = data_dir / 'disk.img'
         disk_data = None
-        if not args.temp_disk:
+        if not temp_disk:
             try:
                 disk_data = disk_path.read_bytes()
             except FileNotFoundError:
@@ -718,7 +734,7 @@ def main(args=None):
     except Error as e:
         sys.exit(f'cpm80: {e}')
 
-    if not args.temp_disk:
+    if not temp_disk:
         disk_path.write_bytes(image.data)
 
 
