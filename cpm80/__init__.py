@@ -29,13 +29,17 @@ class DiskFormat(object):
             raise Error('block size 1024 is not valid for disks with '
                         'more than 0x100 blocks')
 
-        self.sectors_per_track = sectors_per_track
-        self.num_reserved_tracks = num_reserved_tracks
-        self.block_size = block_size
-        self.num_blocks = num_blocks
-        self.num_dir_entries = num_dir_entries
-        self.skew_factor = 0  # No translation.
-        self.removable = True
+        self.params = dict(
+            sectors_per_track=sectors_per_track,
+            num_reserved_tracks=num_reserved_tracks,
+            block_size=block_size,
+            num_blocks=num_blocks,
+            num_dir_entries=num_dir_entries,
+            skew_factor=0,  # No translation.
+            removable=True)
+
+        for param, value in self.params.items():
+            self.__setattr__(param, value)
 
         # CP/M Disk Parameter Block Fields.
         self.bls_block_size = self.block_size
@@ -63,6 +67,10 @@ class DiskFormat(object):
                                         self.block_size)
         total_num_blocks = num_reserved_blocks + self.num_blocks
         self.disk_size = total_num_blocks * self.block_size
+
+    def __repr__(self):
+        params = ', '.join(f'{p}={v}' for p, v in self.params.items())
+        return f'{__class__.__name__}({params})'
 
     def translate_sector(self, logical_sector):
         # TODO: Support arbitrary skew factors.
