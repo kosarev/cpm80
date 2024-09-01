@@ -599,9 +599,11 @@ class CPMMachineMixin(object):
 
     def on_ccp_command(self):
         assert self.pc == self.__CCP_RUN_COMMAND
-        command, *args = self.__ccp_command_line.split()
-        if command == 'exit':
-            self.__done = True
+        *args, = self.__ccp_command_line.split()
+        if len(args) > 0:
+            command, *args = args
+            if command == 'exit':
+                self.__done = True
 
     def run(self):
         while not self.__done:
@@ -628,7 +630,7 @@ def main(args=None):
     args = parser.parse_args(args)
 
     console_reader = None
-    if args.commands is not None:
+    if len(args.commands) > 0:
         console_reader = StringKeyboard(*args.commands)
 
     app_dirs = appdirs.AppDirs('cpm80')

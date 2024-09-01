@@ -3,6 +3,6 @@
 import cpm80
 
 
-def test_main(capsys):
+def test_commands(capsys):
     cpm80.main(['--temp-disk', 'dir'])
     assert capsys.readouterr().out == '\r\nA>dir\r\r\nNO FILE\r\nA>'
