@@ -67,11 +67,10 @@ class DiskFormat(object):
         self.al0_allocation_mask = (dir_alloc_mask >> 8) & 0xff
         self.al1_allocation_mask = (dir_alloc_mask >> 0) & 0xff
 
-        self.num_reserved_blocks = _div_ceil(
-            self.num_reserved_tracks * self.sectors_per_track * SECTOR_SIZE,
-            self.block_size)
-        total_num_blocks = self.num_reserved_blocks + self.num_blocks
-        self.disk_size = total_num_blocks * self.block_size
+        self.reserved_size = (self.num_reserved_tracks *
+                              self.sectors_per_track * SECTOR_SIZE)
+        self.unreserved_size = self.num_blocks * self.block_size
+        self.disk_size = self.reserved_size + self.unreserved_size
 
     def __repr__(self):
         params = ', '.join(f'{p}={v}' for p, v in self.params.items())
@@ -126,11 +125,12 @@ class DiskImage(object):
             self.data[:] = data
 
         if store_format:
-            if self.format.num_reserved_blocks < 1:
-                raise Error('no space for storing disk format')
-
             spec = ' '.join(self.format.spec)
             header = f'{self.__SIGNATURE}\n{spec}\n\n'.encode('ascii')
+
+            if self.format.reserved_size < len(header):
+                raise Error('no reserved space for disk format')
+
             self.data[:len(header)] = header
 
     @staticmethod
