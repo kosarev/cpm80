@@ -5,6 +5,6 @@ import cpm80
 
 def test_spec():
     assert cpm80.DiskImage.parse_header(
-        b'# cpm80 --sectors-per-track=40 --num-reserved-tracks=2 '
-        b'--block-size=2048 --num-blocks=395 '
-        b'--num-dir-entries=128')['block_size'] == 2048
+        b'cpm80 disk image <https://pypi.org/project/cpm80>\n'
+        b'sectors_per_track=40 num_reserved_tracks=2 block_size=2048 '
+        b'num_blocks=395 num_dir_entries=128\n\n')['block_size'] == 2048

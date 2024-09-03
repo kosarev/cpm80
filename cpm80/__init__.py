@@ -44,8 +44,7 @@ class DiskFormat(object):
         # TODO: Support fixed drives.
         self.removable = True
 
-        self.spec = tuple(f"--{p.replace('_', '-')}={int(v)}"
-                          for p, v in self.params.items())
+        self.spec = tuple(f'{p}={v}' for p, v in self.params.items())
 
         # CP/M Disk Parameter Block Fields.
         self.bls_block_size = self.block_size
@@ -82,20 +81,18 @@ class DiskFormat(object):
     def parse_spec(specs):
         params = DiskFormat().params
         for s in specs:
-            if not s.startswith('--'):
-                raise Error(f'invalid specifier {s}')
-
-            s, *v = s[2:].split('=', maxsplit=1)
-            p = s.replace('-', '_')
+            p, eq, v = s.partition('=')
+            if p == '' or eq != '=' or v == '':
+                raise Error(f'invalid specifier {repr(s)}')
             if p not in params:
-                raise Error(f'unknown parameter {s}')
+                raise Error(f'unknown parameter {repr(p)}')
 
-            if len(v) != 1:
-                raise Error(f'no value for parameter {s}')
-            v, = v
+            try:
+                v = int(v)
+            except ValueError as e:
+                raise Error(f'invalid value for parameter {repr(p)}: {e}')
 
-            # TODO: Catch conversion errors.
-            params[p] = int(v)
+            params[p] = v
 
         return params
 
@@ -116,6 +113,8 @@ DISK_FORMATS = {
 
 
 class DiskImage(object):
+    __SIGNATURE = 'cpm80 disk image <https://pypi.org/project/cpm80>'
+
     def __init__(self, format, *, data=None, store_format=True):
         self.format = format
 
@@ -131,27 +130,23 @@ class DiskImage(object):
                 raise Error('no space for storing disk format')
 
             spec = ' '.join(self.format.spec)
-            id = (f'# cpm80 {spec}\n'
-                  '# CP/M-80 2.2 emulator disk image\n'
-                  '# <https://github.com/kosarev/cpm80>\n')
-            self.data[:len(id)] = id.encode('ascii')
+            header = f'{self.__SIGNATURE}\n{spec}\n\n'.encode('ascii')
+            self.data[:len(header)] = header
 
     @staticmethod
     def parse_header(data):
-        header = data.splitlines()[0].decode('ascii').split()
-        if not header or header.pop(0) != '#':
-            raise Error('no disk header')
-        if not header or header.pop(0) != 'cpm80':
-            raise Error('invalid disk header')
+        header = data.partition(b'\n\n')[0].decode('ascii').splitlines()
+        if not header or not header.pop(0).startswith(__class__.__SIGNATURE):
+            raise Error('no disk signature')
 
-        specs = []
-        while header:
-            s = header.pop(0)
-            if not s.startswith('--'):
-                break
-            specs.append(s)
+        if not header:
+            raise Error('no disk parameters')
+        format = DiskFormat.parse_spec(header.pop(0).split())
 
-        return DiskFormat.parse_spec(specs)
+        if header:
+            raise Error(f'unexpected header line {repr(header[0])}')
+
+        return format
 
     def get_sector(self, sector, track):
         sector_index = sector + track * self.format.spt_sectors_per_track

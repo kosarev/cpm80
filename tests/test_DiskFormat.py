@@ -15,8 +15,8 @@ def test_basic():
 
 def test_spec():
     assert cpm80.DiskFormat.parse_spec([
-        '--sectors-per-track=40',
-        '--num-reserved-tracks=2',
-        '--block-size=2048',
-        '--num-blocks=395',
-        '--num-dir-entries=128'])['block_size'] == 2048
+        'sectors_per_track=40',
+        'num_reserved_tracks=2',
+        'block_size=2048',
+        'num_blocks=395',
+        'num_dir_entries=128'])['block_size'] == 2048
