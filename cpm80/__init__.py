@@ -142,6 +142,11 @@ class DiskImage:
         self.data[:] = b'\xe5' * size
 
         if data is not None:
+            # Slice assignment on a bytearray resizes it, so a
+            # mismatch would otherwise pass silently.
+            if len(data) != size:
+                raise Error(f'invalid disk image size ({len(data)}, '
+                            f'expected {size})')
             self.data[:] = data
 
         if store_format:
