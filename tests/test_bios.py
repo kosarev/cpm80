@@ -48,3 +48,16 @@ def test_default_dma() -> None:
     DEFAULT_DMA = 0x80
     assert bytes(m.memory[DEFAULT_DMA:DEFAULT_DMA + 128]) == marker
     assert m.a == 0
+
+
+def test_sector_io_errors() -> None:
+    drive = cpm80.DiskDrive()
+    m = cpm80.I8080CPMMachine(drive=drive)
+
+    # Transfers outside the disk report an error rather than crash
+    # or alias into another track.
+    drive.current_sector = drive.format.sectors_per_track
+    m.on_read()
+    assert m.a == 1
+    m.on_write()
+    assert m.a == 1

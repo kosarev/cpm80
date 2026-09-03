@@ -181,8 +181,16 @@ class DiskImage:
         return format
 
     def get_sector(self, sector: int, track: int) -> memoryview:
+        # An out-of-range sector would otherwise silently alias
+        # into another track.
+        if not 0 <= sector < self.format.spt_sectors_per_track:
+            raise Error(f'invalid sector number ({sector})')
+
         sector_index = sector + track * self.format.spt_sectors_per_track
         offset = sector_index * SECTOR_SIZE
+        if track < 0 or offset + SECTOR_SIZE > len(self.data):
+            raise Error(f'invalid track number ({track})')
+
         return memoryview(self.data)[offset:offset + SECTOR_SIZE]
 
     def translate_sector(self, logical_sector: int) -> int:
@@ -514,12 +522,23 @@ class CPMMachineMixin(_MachineBase):
         self.__dma = self.bc
 
     def on_read(self) -> None:
-        self.set_memory_block(self.__dma, self.__drive.read_sector())
+        try:
+            data = self.__drive.read_sector()
+        except Error:
+            self.a = 1  # Read error.
+            return
+
+        self.set_memory_block(self.__dma, data)
         self.a = 0  # Read OK.
 
     def on_write(self) -> None:
         data = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
-        self.__drive.write_sector(data)
+        try:
+            self.__drive.write_sector(data)
+        except Error:
+            self.a = 1  # Write error.
+            return
+
         self.a = 0  # Write OK.
 
     def on_listst(self) -> None:
