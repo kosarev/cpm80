@@ -26,13 +26,17 @@ jobs:
       run: |
         pycodestyle .
         ruff check .
-        mypy --config-file .mypy.ini cpm80 tests
+        mypy --config-file .mypy.ini cpm80 tests examples
 
     - name: Install the package
       run: pip install .
 
     - name: Run tests
       run: pytest tests
+
+    - name: Run the examples
+      run: |
+        for e in examples/*.py; do ./$e; done
 
   build:
     needs: test
