@@ -6,7 +6,7 @@ import termios
 import tty
 import typing
 
-import appdirs
+import platformdirs
 import z80
 
 SECTOR_SIZE = 128
@@ -743,7 +743,7 @@ def main(commands: list[str] | None = None) -> None:
     if commands:
         console_reader = StringKeyboard(*commands)
 
-    app_dirs = appdirs.AppDirs('cpm80')
+    app_dirs = platformdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 

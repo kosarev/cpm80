@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install --upgrade pycodestyle ruff pytest mypy setuptools wheel z80 appdirs
+        python -m pip install --upgrade pycodestyle ruff pytest mypy setuptools wheel z80 platformdirs
     - name: Run pycodestyle, ruff and mypy
       run: |
         pycodestyle .
