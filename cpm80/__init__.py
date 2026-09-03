@@ -27,15 +27,18 @@ class DiskFormat:
             raise Error('block size 1024 is not valid for disks with '
                         'more than 0x100 blocks')
 
+        self.sectors_per_track = sectors_per_track
+        self.num_reserved_tracks = num_reserved_tracks
+        self.block_size = block_size
+        self.num_blocks = num_blocks
+        self.num_dir_entries = num_dir_entries
+
         self.params = {
             'sectors_per_track': sectors_per_track,
             'num_reserved_tracks': num_reserved_tracks,
             'block_size': block_size,
             'num_blocks': num_blocks,
             'num_dir_entries': num_dir_entries}
-
-        for param, value in self.params.items():
-            self.__setattr__(param, value)
 
         # TODO: Support arbitrary skew factors.
         self.skew_factor = 0  # No translation.
