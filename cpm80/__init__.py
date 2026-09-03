@@ -670,13 +670,14 @@ class CPMMachineMixin(_MachineBase):
 
         return dir_code
 
+    # Reads the whole file unless given a number of sectors.
     # TODO: Support custom FCB and DMA addresses.
-    def read_file(self, num_sectors: int = 1) -> bytes:
+    def read_file(self, num_sectors: int | None = None) -> bytes:
         DMA = self.__TPA
         self.set_dma(DMA)
 
         sectors: list[bytes] = []
-        while len(sectors) < num_sectors:
+        while num_sectors is None or len(sectors) < num_sectors:
             self.bdos_call(self.F_READ, de=self.__DEFAULT_FCB)
 
             if self.a != 0:

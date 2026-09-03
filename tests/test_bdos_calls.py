@@ -53,6 +53,17 @@ def test_file_read_write() -> None:
     assert m.read_file() == b'abc' + b'\x1a' * (cpm80.SECTOR_SIZE - 3)
     m.close_file()
 
+    # Files larger than one sector read back whole by default.
+    data = bytes(range(256)) + b'x' * 44
+    m.make_file('big.bin')
+    m.write_file(data)
+    m.close_file()
+
+    m.open_file('big.bin')
+    assert m.read_file() == data + b'\x1a' * (3 * cpm80.SECTOR_SIZE -
+                                              len(data))
+    m.close_file()
+
 
 def test_file_rename() -> None:
     m = cpm80.I8080CPMMachine()
