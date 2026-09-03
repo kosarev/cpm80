@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
+import pytest
 
 import cpm80
-import pytest
 
 
 def test_c_writestr(capsys):
