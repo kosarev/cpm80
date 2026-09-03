@@ -2,7 +2,6 @@
 
 import cpm80
 
-
 drive = cpm80.DiskDrive()
 
 # Create a file on the disk using one machine instance.

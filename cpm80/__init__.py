@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
-
-import appdirs
 import importlib.resources
 import pathlib
 import sys
 import termios
 import tty
+
+import appdirs
 import z80
 
 SECTOR_SIZE = 128
@@ -15,7 +14,7 @@ class Error(BaseException):
     pass
 
 
-class DiskFormat(object):
+class DiskFormat:
     def __init__(self, *, sectors_per_track=40, num_reserved_tracks=2,
                  block_size=2048, num_blocks=395, num_dir_entries=128):
         def _div_ceil(a, b):
@@ -28,12 +27,12 @@ class DiskFormat(object):
             raise Error('block size 1024 is not valid for disks with '
                         'more than 0x100 blocks')
 
-        self.params = dict(
-            sectors_per_track=sectors_per_track,
-            num_reserved_tracks=num_reserved_tracks,
-            block_size=block_size,
-            num_blocks=num_blocks,
-            num_dir_entries=num_dir_entries)
+        self.params = {
+            'sectors_per_track': sectors_per_track,
+            'num_reserved_tracks': num_reserved_tracks,
+            'block_size': block_size,
+            'num_blocks': num_blocks,
+            'num_dir_entries': num_dir_entries}
 
         for param, value in self.params.items():
             self.__setattr__(param, value)
@@ -82,14 +81,14 @@ class DiskFormat(object):
         for s in specs:
             p, eq, v = s.partition('=')
             if p == '' or eq != '=' or v == '':
-                raise Error(f'invalid specifier {repr(s)}')
+                raise Error(f'invalid specifier {s!r}')
             if p not in params:
-                raise Error(f'unknown parameter {repr(p)}')
+                raise Error(f'unknown parameter {p!r}')
 
             try:
                 v = int(v)
             except ValueError as e:
-                raise Error(f'invalid value for parameter {repr(p)}: {e}')
+                raise Error(f'invalid value for parameter {p!r}: {e}')
 
             params[p] = v
 
@@ -111,7 +110,7 @@ DISK_FORMATS = {
 }
 
 
-class DiskImage(object):
+class DiskImage:
     __SIGNATURE = 'cpm80 disk image <https://pypi.org/project/cpm80>'
 
     def __init__(self, format, *, data=None, store_format=True):
@@ -144,7 +143,7 @@ class DiskImage(object):
         format = DiskFormat.parse_spec(header.pop(0).split())
 
         if header:
-            raise Error(f'unexpected header line {repr(header[0])}')
+            raise Error(f'unexpected header line {header[0]!r}')
 
         return format
 
@@ -157,7 +156,7 @@ class DiskImage(object):
         return self.format.translate_sector(logical_sector)
 
 
-class DiskDrive(object):
+class DiskDrive:
     def __init__(self, image=None):
         if image is None:
             image = DiskImage(DiskFormat())
@@ -183,7 +182,7 @@ class DiskDrive(object):
         sector[:] = data
 
 
-class KeyboardDevice(object):
+class KeyboardDevice:
     def __init__(self):
         self.__ctrl_c_count = 0
 
@@ -213,7 +212,7 @@ class KeyboardDevice(object):
         return ch
 
 
-class StringKeyboard(object):
+class StringKeyboard:
     def __init__(self, *commands):
         self.__input = '\n'.join(commands) + '\n'
         self.__i = 0
@@ -227,13 +226,13 @@ class StringKeyboard(object):
         return ord(c)
 
 
-class DisplayDevice(object):
+class DisplayDevice:
     def output(self, c):
         sys.stdout.write(chr(c))
         sys.stdout.flush()
 
 
-class StringDisplay(object):
+class StringDisplay:
     def __init__(self):
         self.__output = []
 
@@ -245,7 +244,7 @@ class StringDisplay(object):
         return ''.join(chr(c) for c in self.__output)
 
 
-class CPMMachineMixin(object):
+class CPMMachineMixin:
     __REBOOT = 0x0000
     __DEFAULT_FCB = 0x005c
     __TPA = 0x0100
