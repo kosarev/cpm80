@@ -1,7 +1,10 @@
 # cpm80
 CP/M-80 2.2 emulator with Python API.
 
-![Python Package CI](https://github.com/kosarev/cpm80/actions/workflows/python-package.yml/badge.svg?cache-control=no-cache)
+[![Python package CI](https://github.com/kosarev/cpm80/actions/workflows/python-package.yml/badge.svg)](https://github.com/kosarev/cpm80/actions/workflows/python-package.yml)
+[![PyPI](https://img.shields.io/pypi/v/cpm80)](https://pypi.org/project/cpm80/)
+[![Python](https://img.shields.io/pypi/pyversions/cpm80)](https://pypi.org/project/cpm80/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/kosarev/cpm80/blob/main/LICENSE)
 
 
 Based on the fast and flexible [z80](https://github.com/kosarev/z80) emulator.
