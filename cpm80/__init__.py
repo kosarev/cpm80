@@ -302,26 +302,13 @@ class HostDrive(DiskDrive):
             raise Error(f'cannot mount {self.directory}: '
                         'not a directory')
 
-        f = self.format
-        image = DiskImage(f)
+        # Build on a fresh image through its own file system, so
+        # the host drive's reactions to writes and boots do not
+        # trigger while mounting.
+        fs = FileSystem(DiskImage(self.format))
         host_paths: dict[str, pathlib.Path] = {}
         warnings: list[str] = []
 
-        # Mirror the space accounting BDOS does: data blocks, and
-        # directory entries of 8 or 16 block pointers each.
-        DIR_ENTRY_SIZE = 32
-        num_dir_blocks = -(f.num_dir_entries * DIR_ENTRY_SIZE //
-                           -f.block_size)
-        free_blocks = f.num_blocks - num_dir_blocks
-        free_entries = f.num_dir_entries
-        pointers_per_entry = 8 if f.dsm_disk_size_max >= 0x100 else 16
-
-        # Build through a plain drive on the new image, so the
-        # host drive's own reactions to writes and boots do not
-        # trigger while mounting; the boot signon goes to a string
-        # nobody reads.
-        m = I8080CPMMachine(drives=[DiskDrive(image)],
-                            console_writer=StringDisplay())
         for path in sorted(self.directory.iterdir()):
             if not path.is_file() or path.name.startswith('.'):
                 continue
@@ -339,24 +326,15 @@ class HostDrive(DiskDrive):
                     f'taken by {taken_by}')
                 continue
 
-            data = path.read_bytes()
-            num_blocks = -(len(data) // -f.block_size)
-            num_entries = max(
-                1, -(num_blocks // -pointers_per_entry))
-            if num_blocks > free_blocks or num_entries > free_entries:
+            try:
+                fs.write(name, path.read_bytes())
+            except Error:
                 warnings.append(f'{path.name}: no space left')
                 continue
 
-            m.make_file(name)
-            if data:
-                m.write_file(data)
-            m.close_file()
-
-            free_blocks -= num_blocks
-            free_entries -= num_entries
             host_paths[name] = path
 
-        self.image = image
+        self.image = fs.image
         self.host_paths = host_paths
         self.warnings = warnings
 
