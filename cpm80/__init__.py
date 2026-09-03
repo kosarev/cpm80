@@ -353,59 +353,18 @@ class HostDrive(DiskDrive):
     # Writes the files of the mounted disk back to the host
     # directory -- created and changed files only; never deletes
     # host files.  Contents are written as they are on the disk,
-    # record-padded.
+    # record-padded.  Reading the live image through a file system
+    # of its own is safe: it only reads.
     def flush_files(self) -> None:
-        f = self.format
-        data = self.image.data
-        DIR_ENTRY_SIZE = 32
-        big_pointers = f.dsm_disk_size_max >= 0x100
-
-        # Collect (extent, records, blocks) per file from the
-        # directory entries.
-        files: dict[str, list[tuple[int, int, list[int]]]] = {}
-        for i in range(f.num_dir_entries):
-            offset = f.reserved_size + i * DIR_ENTRY_SIZE
-            entry = data[offset:offset + DIR_ENTRY_SIZE]
-
-            USER_0 = 0
-            if entry[0] != USER_0:
-                continue
-
-            # Mask out the attribute bits.
-            name = bytes(b & 0x7f for b in entry[1:9]).decode().strip()
-            type = bytes(b & 0x7f for b in entry[9:12]).decode().strip()
-            cpm_name = f'{name}.{type}' if type else name
-
-            extent = ((entry[14] & 0x3f) << 5) | (entry[12] & 0x1f)
-            record_count = entry[15]
-            records = ((extent & f.exm_extent_mask) * 128 +
-                       record_count)
-
-            if big_pointers:
-                blocks = [entry[16 + j * 2] | (entry[17 + j * 2] << 8)
-                          for j in range(8)]
-            else:
-                blocks = list(entry[16:32])
-
-            files.setdefault(cpm_name, []).append(
-                (extent, records, [b for b in blocks if b != 0]))
-
-        for cpm_name, entries in files.items():
-            entries.sort()
-
-            content = bytearray()
-            for extent, records, blocks in entries:
-                chunk = bytearray()
-                for block in blocks:
-                    offset = f.reserved_size + block * f.bls_block_size
-                    chunk += data[offset:offset + f.bls_block_size]
-                content += chunk[:records * SECTOR_SIZE]
+        fs = FileSystem(self.image)
+        for cpm_name in fs.names():
+            content = fs.read(cpm_name)
 
             path = self.host_paths.get(cpm_name)
             if path is None:
                 path = self.directory / cpm_name
 
-            if self.__same_as_host_file(path, bytes(content)):
+            if self.__same_as_host_file(path, content):
                 continue
 
             path.write_bytes(content)
