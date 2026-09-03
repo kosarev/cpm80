@@ -731,7 +731,7 @@ def main(commands: list[str] | None = None) -> None:
             'automatically before taking input from console.\n'
             '\n'
             'Internal commands:\n'
-            '  exit           Termiante emulation and quit.')
+            '  exit           Terminate emulation and quit.')
 
     # TODO: Provide this functionality via a command.
     temp_disk = False
