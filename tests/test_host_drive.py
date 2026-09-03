@@ -105,11 +105,13 @@ def test_flush_new_and_updated_files(tmp_path: pathlib.Path) -> None:
     drive.flush_files()
 
     PAD = b'\x1a'
-    assert ((tmp_path / 'new.txt').read_bytes() ==
+    # Files born on the drive land under their exact CP/M names;
+    # mounted files keep their original host names.
+    assert ((tmp_path / 'NEW.TXT').read_bytes() ==
             b'created inside' + PAD * (cpm80.SECTOR_SIZE - 14))
     assert ((tmp_path / 'old.txt').read_bytes() ==
             b'updated!' + PAD * (cpm80.SECTOR_SIZE - 8))
-    assert drive.host_paths['NEW.TXT'] == tmp_path / 'new.txt'
+    assert drive.host_paths['NEW.TXT'] == tmp_path / 'NEW.TXT'
 
 
 def test_flush_skips_unchanged_files(tmp_path: pathlib.Path) -> None:
@@ -150,7 +152,7 @@ def test_flush_on_close(tmp_path: pathlib.Path) -> None:
     m.write_file(b'x')
     m.close_file()
 
-    assert ((tmp_path / 'x.txt').read_bytes() ==
+    assert ((tmp_path / 'X.TXT').read_bytes() ==
             b'x' + b'\x1a' * (cpm80.SECTOR_SIZE - 1))
 
 

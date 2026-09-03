@@ -423,7 +423,7 @@ class HostDrive(DiskDrive):
 
             path = self.host_paths.get(cpm_name)
             if path is None:
-                path = self.directory / cpm_name.lower()
+                path = self.directory / cpm_name
 
             if self.__same_as_host_file(path, bytes(content)):
                 continue

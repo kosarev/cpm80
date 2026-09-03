@@ -48,7 +48,7 @@ A>pip a:=b:hello.txt
 A>save 1 b:dump.dat
 A>exit
 $ ls
-dump.dat  hello.txt
+DUMP.DAT  hello.txt
 ```
 
 A single <kbd>Ctrl</kbd> + <kbd>C</kbd> re-reads the directory --

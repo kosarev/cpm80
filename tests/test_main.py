@@ -55,4 +55,4 @@ def test_files_saved_on_b_land_on_the_host(
         tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
     cpm80.main(['--temp-disk', 'save 1 b:x.dat'])
-    assert (tmp_path / 'x.dat').stat().st_size == 256
+    assert (tmp_path / 'X.DAT').stat().st_size == 256
