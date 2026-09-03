@@ -6,6 +6,7 @@
 #
 #   Published under the MIT license.
 
+import os
 import pathlib
 
 import pytest
@@ -86,3 +87,68 @@ def test_remount(tmp_path: pathlib.Path) -> None:
 def test_missing_directory(tmp_path: pathlib.Path) -> None:
     with pytest.raises(cpm80.Error):
         cpm80.HostDrive(tmp_path / 'nonexistent')
+
+
+def test_flush_new_and_updated_files(tmp_path: pathlib.Path) -> None:
+    (tmp_path / 'old.txt').write_bytes(b'old')
+    drive = cpm80.HostDrive(tmp_path)
+
+    m = cpm80.I8080CPMMachine(drives=[drive])
+    m.make_file('new.txt')
+    m.write_file(b'created inside')
+    m.close_file()
+
+    m.open_file('old.txt')
+    m.write_file(b'updated!')
+    m.close_file()
+
+    drive.flush_files()
+
+    PAD = b'\x1a'
+    assert ((tmp_path / 'new.txt').read_bytes() ==
+            b'created inside' + PAD * (cpm80.SECTOR_SIZE - 14))
+    assert ((tmp_path / 'old.txt').read_bytes() ==
+            b'updated!' + PAD * (cpm80.SECTOR_SIZE - 8))
+    assert drive.host_paths['NEW.TXT'] == tmp_path / 'new.txt'
+
+
+def test_flush_skips_unchanged_files(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / 'keep.txt'
+    path.write_bytes(b'keep')
+    drive = cpm80.HostDrive(tmp_path)
+
+    os.utime(path, ns=(0, 0))
+    drive.flush_files()
+
+    # Not rewritten, and in particular not re-padded.
+    assert path.stat().st_mtime_ns == 0
+    assert path.read_bytes() == b'keep'
+
+
+def test_flush_never_deletes_host_files(
+        tmp_path: pathlib.Path) -> None:
+    (tmp_path / 'a.txt').write_bytes(b'a')
+    drive = cpm80.HostDrive(tmp_path)
+
+    m = cpm80.I8080CPMMachine(
+        drives=[drive],
+        console_reader=cpm80.StringKeyboard('era a.txt'),
+        console_writer=cpm80.StringDisplay())
+    m.run()
+
+    drive.flush_files()
+    assert (tmp_path / 'a.txt').read_bytes() == b'a'
+
+
+def test_flush_multi_extent_files(tmp_path: pathlib.Path) -> None:
+    content = bytes(range(256)) * 80
+    (tmp_path / 'big.bin').write_bytes(content)
+
+    # 8-bit block pointers, one 16K logical extent per directory
+    # entry, so the file spans two entries.
+    format = cpm80.DiskFormat(block_size=1024, num_blocks=100)
+    drive = cpm80.HostDrive(tmp_path, format=format)
+
+    (tmp_path / 'big.bin').unlink()
+    drive.flush_files()
+    assert (tmp_path / 'big.bin').read_bytes() == content
