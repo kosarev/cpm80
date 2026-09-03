@@ -561,11 +561,28 @@ class CPMMachineMixin(_MachineBase):
         self.sp = (self.sp - 1) & 0xffff
         memory[self.sp] = (nn >> 0) & 0xff
 
+    # Runs until the next breakpoint is handled, or, when told to
+    # park at an address, until execution is about to hit it, which
+    # is reported by returning False.  Breakpoints catch before the
+    # marked instruction executes, so handled ones are explicitly
+    # stepped over -- unless the handler moved the program counter,
+    # in which case execution just continues at the new location.
+    def __run_step(self, *, park: int | None = None) -> bool:
+        events = super().run()
+        if events & self._BREAKPOINT_HIT:
+            addr = self.pc
+            if addr == park:
+                return False
+
+            self.on_breakpoint()
+            if self.pc == addr:
+                self.step_over_breakpoint()
+
+        return True
+
     def __reach_ccp_command_processing(self) -> None:
-        while self.pc != self.__CCP_GET_COMMAND:
-            events = super().run()
-            if events & self._BREAKPOINT_HIT:
-                self.on_breakpoint()
+        while self.__run_step(park=self.__CCP_GET_COMMAND):
+            pass
 
     def bdos_call(self, entry: int, *, de: int | None = None) -> None:
         # Make sure CCP got control and initialised the system.
@@ -766,9 +783,7 @@ class CPMMachineMixin(_MachineBase):
     # signature mismatch.
     def run(self) -> None:  # type: ignore[override]
         while not self.__done:
-            events = super().run()
-            if events & self._BREAKPOINT_HIT:
-                self.on_breakpoint()
+            self.__run_step()
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
