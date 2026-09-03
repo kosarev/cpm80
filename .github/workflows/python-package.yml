@@ -9,11 +9,16 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - uses: actions/checkout@v4.2.2
@@ -38,4 +43,4 @@ jobs:
         pytest tests
     - name: Run the examples
       run: |
-        for e in examples/*.py; do ./$e; done
+        for e in examples/*.py; do python $e; done
