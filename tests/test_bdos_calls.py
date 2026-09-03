@@ -11,6 +11,21 @@ import pytest
 import cpm80
 
 
+def test_filename_validation() -> None:
+    m = cpm80.I8080CPMMachine()
+
+    # A filename without a type is valid.
+    m.make_file('noext')
+    m.close_file()
+    m.open_file('noext')
+    m.close_file()
+
+    for bad in ('', '.txt', 'toolongname.txt', 'file.text', 'a.b.c',
+                'f\xffle.txt'):
+        with pytest.raises(cpm80.Error):
+            m.make_file(bad)
+
+
 def test_c_writestr(capsys: pytest.CaptureFixture[str]) -> None:
     m = cpm80.I8080CPMMachine()
     m.write_str('abc')

@@ -578,18 +578,28 @@ class CPMMachineMixin(_MachineBase):
         return cpm_version, cpm_type, machine_type
 
     def __make_fcb(self, filename: str) -> bytes:
-        name, type = filename.split('.', maxsplit=1)
+        # The type is optional, as in 'dump'.
+        name, _, type = filename.partition('.')
 
         DEFAULT_DRIVE = 0
         drive = DEFAULT_DRIVE
 
-        name_field = name.upper().encode('ascii')
-        name_field += b' ' * (8 - len(name_field))
-        assert len(name_field) == 8
+        try:
+            name_field = name.upper().encode('ascii')
+            type_field = type.upper().encode('ascii')
+        except UnicodeEncodeError:
+            raise Error(f'invalid filename {filename!r}: not an ASCII name')
 
-        type_field = type.upper().encode('ascii')
+        if not 1 <= len(name_field) <= 8:
+            raise Error(f'invalid filename {filename!r}: the name must be '
+                        '1 to 8 characters')
+
+        if b'.' in type_field or len(type_field) > 3:
+            raise Error(f'invalid filename {filename!r}: the type must be '
+                        '0 to 3 characters')
+
+        name_field += b' ' * (8 - len(name_field))
         type_field += b' ' * (3 - len(type_field))
-        assert len(type_field) == 3
 
         extent = 0
 
