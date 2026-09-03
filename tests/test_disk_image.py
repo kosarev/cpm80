@@ -18,6 +18,18 @@ def test_spec() -> None:
         b'num_blocks=395 num_dir_entries=128\n\n')['block_size'] == 2048
 
 
+def test_bad_header() -> None:
+    # A foreign image with no signature.
+    with pytest.raises(cpm80.Error):
+        cpm80.DiskImage.parse_header(b'\xe5' * 256)
+
+    # A signature followed by an undecodable header.
+    with pytest.raises(cpm80.Error):
+        cpm80.DiskImage.parse_header(
+            b'cpm80 disk image <https://pypi.org/project/cpm80>\n'
+            b'\xe5\xe5\n\n')
+
+
 def test_data_size_mismatch() -> None:
     format = cpm80.DiskFormat()
 

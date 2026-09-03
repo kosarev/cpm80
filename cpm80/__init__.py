@@ -160,9 +160,16 @@ class DiskImage:
 
     @staticmethod
     def parse_header(data: bytes) -> dict[str, int]:
-        header = data.partition(b'\n\n')[0].decode('ascii').splitlines()
-        if not header or not header.pop(0).startswith(DiskImage.__SIGNATURE):
+        if not data.startswith(DiskImage.__SIGNATURE.encode('ascii')):
             raise Error('no disk signature')
+
+        try:
+            header = data.partition(b'\n\n')[0].decode('ascii').splitlines()
+        except UnicodeDecodeError as e:
+            raise Error(f'cannot decode disk header: {e}')
+
+        # Drop the signature line.
+        header.pop(0)
 
         if not header:
             raise Error('no disk parameters')
