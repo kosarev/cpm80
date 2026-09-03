@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+#   CP/M-80 2.2 emulator.
+#   https://github.com/kosarev/cpm80
+#
+#   Copyright (C) 2024-2026 Ivan Kosarev.
+#   mail@ivankosarev.com
+#
+#   Published under the MIT license.
+
 import cpm80
 
 drive = cpm80.DiskDrive()
