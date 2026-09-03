@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'cpm80'
-version = '1.0a8'
+version = '1.0.0'
 description = 'CP/M-80 2.2 emulator with API'
 readme = 'README.md'
 license = {text = 'MIT'}
@@ -17,7 +17,7 @@ dependencies = [
   'platformdirs',
 ]
 classifiers = [
-  'Development Status :: 3 - Alpha',
+  'Development Status :: 5 - Production/Stable',
   'Environment :: Console',
   'Intended Audience :: Developers',
   'Intended Audience :: Education',
