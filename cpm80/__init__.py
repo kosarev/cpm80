@@ -2,12 +2,16 @@ import collections.abc
 import importlib.resources
 import pathlib
 import sys
-import termios
-import tty
 import typing
 
 import platformdirs
 import z80
+
+if sys.platform == 'win32':
+    import msvcrt
+else:
+    import termios
+    import tty
 
 SECTOR_SIZE = 128
 
@@ -198,13 +202,19 @@ class KeyboardDevice:
     def input(self) -> int | None:
         # Borrowed from:
         # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            ch = ord(sys.stdin.read(1))
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        if sys.platform == 'win32':
+            # Note that Ctrl+C comes as an ordinary character and
+            # special keys come as two reads with a 0x00 or 0xe0
+            # prefix, undecoded, just as escape sequences on Unix.
+            ch = ord(msvcrt.getch())
+        else:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = ord(sys.stdin.read(1))
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
         # Catch Ctrl+C.
         if ch == 3:
