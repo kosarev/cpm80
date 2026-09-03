@@ -39,10 +39,8 @@ def test_mount(tmp_path: pathlib.Path) -> None:
     m.close_file()
 
 
-def test_invalid_and_conflicting_names(
-        tmp_path: pathlib.Path) -> None:
+def test_invalid_names(tmp_path: pathlib.Path) -> None:
     (tmp_path / 'A.TXT').write_bytes(b'x')
-    (tmp_path / 'a.txt').write_bytes(b'y')
     (tmp_path / 'toolongname.txt').write_bytes(b'z')
     (tmp_path / 'file.text').write_bytes(b'z')
     (tmp_path / 'my file.txt').write_bytes(b'z')
@@ -52,12 +50,26 @@ def test_invalid_and_conflicting_names(
 
     assert list(drive.host_paths) == ['A.TXT']
     assert drive.host_paths['A.TXT'] == tmp_path / 'A.TXT'
-    assert any('a.txt' in w and 'already taken' in w
-               for w in drive.warnings)
     for name in ('toolongname.txt', 'file.text', 'my file.txt',
                  'archive.tar.gz'):
         assert any(name in w and 'not a valid CP/M filename' in w
                    for w in drive.warnings)
+
+
+def test_conflicting_names(tmp_path: pathlib.Path) -> None:
+    (tmp_path / 'A.TXT').write_bytes(b'x')
+    (tmp_path / 'a.txt').write_bytes(b'y')
+
+    # Names can only conflict on a case-sensitive file system.
+    if len(list(tmp_path.iterdir())) < 2:
+        pytest.skip('needs a case-sensitive file system')
+
+    drive = cpm80.HostDrive(tmp_path)
+
+    assert list(drive.host_paths) == ['A.TXT']
+    assert drive.host_paths['A.TXT'] == tmp_path / 'A.TXT'
+    assert any('a.txt' in w and 'already taken' in w
+               for w in drive.warnings)
 
 
 def test_capacity(tmp_path: pathlib.Path) -> None:
