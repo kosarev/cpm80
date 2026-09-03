@@ -32,6 +32,29 @@ Enter `exit` or just hit <kbd>Ctrl</kbd> + <kbd>C</kbd> three
 times to quit the emulator.
 
 
+## Exchanging files with the host
+
+The directory cpm80 starts in is mounted as drive B:, and fresh
+disks come with PIP, so files just copy.
+
+```
+$ ls
+hello.txt
+$ cpm80
+
+A>dir b:
+B: HELLO    TXT
+A>pip a:=b:hello.txt
+A>save 1 b:dump.dat
+A>exit
+$ ls
+dump.dat  hello.txt
+```
+
+A single <kbd>Ctrl</kbd> + <kbd>C</kbd> re-reads the directory --
+the usual CP/M way of telling the system the disk has changed.
+
+
 ## Running commands automatically
 
 From the command line:
