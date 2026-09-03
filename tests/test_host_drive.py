@@ -136,8 +136,42 @@ def test_flush_never_deletes_host_files(
         console_writer=cpm80.StringDisplay())
     m.run()
 
-    drive.flush_files()
+    # The erasure triggers a flush by itself; the host file stays.
     assert (tmp_path / 'a.txt').read_bytes() == b'a'
+
+
+def test_flush_on_close(tmp_path: pathlib.Path) -> None:
+    drive = cpm80.HostDrive(tmp_path)
+    m = cpm80.I8080CPMMachine(drives=[drive])
+
+    # The file appears on the host as CP/M commits it, with no
+    # explicit flush.
+    m.make_file('x.txt')
+    m.write_file(b'x')
+    m.close_file()
+
+    assert ((tmp_path / 'x.txt').read_bytes() ==
+            b'x' + b'\x1a' * (cpm80.SECTOR_SIZE - 1))
+
+
+def test_warm_boot_flushes_and_remounts(
+        tmp_path: pathlib.Path) -> None:
+    drive = cpm80.HostDrive(tmp_path)
+    m = cpm80.I8080CPMMachine(drives=[drive])
+
+    m.make_file('born.txt')
+    m.write_file(b'born')
+    m.close_file()
+
+    (tmp_path / 'late.txt').write_bytes(b'late')
+    m.on_wboot()
+
+    # The late host file is mounted now, and the file born on the
+    # drive survived the flush and the re-mount.
+    assert sorted(drive.host_paths) == ['BORN.TXT', 'LATE.TXT']
+    m.open_file('late.txt')
+    assert m.read_file().startswith(b'late')
+    m.close_file()
 
 
 def test_flush_multi_extent_files(tmp_path: pathlib.Path) -> None:

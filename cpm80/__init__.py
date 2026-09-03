@@ -228,12 +228,31 @@ class DiskDrive:
         sector = self.image.get_sector(self.current_sector, self.current_track)
         sector[:] = data
 
+    # Called after a BDOS call that closed, deleted, created or
+    # renamed a file on the drive has completed.
+    def on_file_commit(self) -> None:
+        pass
 
-# A drive mirroring a host directory: mounting snapshots the
-# directory's files onto a fresh in-memory disk under 8.3 names, as
-# many as fit.  Files the mount has to leave out are reported in
-# 'warnings'; 'host_paths' maps the CP/M names to the host files
-# they came from.
+    # Called on warm boots, when CP/M re-logs its disks.
+    def on_warm_boot(self) -> None:
+        pass
+
+
+# A drive mirroring a host directory.  Mounting takes a snapshot:
+# the directory's files land on a fresh in-memory disk under their
+# 8.3 names, as many as fit.  Files left out are reported in
+# 'warnings', and 'host_paths' tells which host file each CP/M
+# name came from.
+#
+# From then on the mirror maintains itself.  Whenever a program
+# closes, deletes, creates or renames a file on the drive, the
+# files that changed are written back to the host directory.  A
+# warm boot -- the Ctrl+C at the prompt with which CP/M users
+# signal a changed disk -- writes the changes back and then
+# re-takes the snapshot, picking up what changed on the host side.
+# Writing back only creates and updates host files, never deletes
+# them, so deleting a file on the drive leaves its host original
+# alone.
 class HostDrive(DiskDrive):
     __NAME_CHARS = frozenset('ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                              '0123456789#$%&()-_@!')
@@ -245,6 +264,16 @@ class HostDrive(DiskDrive):
 
         self.directory = pathlib.Path(directory)
         super().__init__(DiskImage(format))
+        self.remount()
+
+    # Keep the host directory up to date without explicit flushes:
+    # written files appear as CP/M commits them, and a warm boot,
+    # the disk-change gesture, flushes and re-takes the snapshot.
+    def on_file_commit(self) -> None:
+        self.flush_files()
+
+    def on_warm_boot(self) -> None:
+        self.flush_files()
         self.remount()
 
     # Only names already valid in CP/M mount, case aside; anything
@@ -269,9 +298,9 @@ class HostDrive(DiskDrive):
                         'not a directory')
 
         f = self.format
-        self.image = DiskImage(f)
-        self.host_paths: dict[str, pathlib.Path] = {}
-        self.warnings: list[str] = []
+        image = DiskImage(f)
+        host_paths: dict[str, pathlib.Path] = {}
+        warnings: list[str] = []
 
         # Mirror the space accounting BDOS does: data blocks, and
         # directory entries of 8 or 16 block pointers each.
@@ -282,20 +311,23 @@ class HostDrive(DiskDrive):
         free_entries = f.num_dir_entries
         pointers_per_entry = 8 if f.dsm_disk_size_max >= 0x100 else 16
 
-        m = I8080CPMMachine(drives=[self])
+        # Build through a plain drive on the new image, so the
+        # host drive's own reactions to writes and boots do not
+        # trigger while mounting.
+        m = I8080CPMMachine(drives=[DiskDrive(image)])
         for path in sorted(self.directory.iterdir()):
             if not path.is_file() or path.name.startswith('.'):
                 continue
 
             name = self.__make_cpm_name(path.name)
             if name is None:
-                self.warnings.append(
+                warnings.append(
                     f'{path.name}: not a valid CP/M filename')
                 continue
 
-            if name in self.host_paths:
-                taken_by = self.host_paths[name].name
-                self.warnings.append(
+            if name in host_paths:
+                taken_by = host_paths[name].name
+                warnings.append(
                     f'{path.name}: the name {name} is already '
                     f'taken by {taken_by}')
                 continue
@@ -305,7 +337,7 @@ class HostDrive(DiskDrive):
             num_entries = max(
                 1, -(num_blocks // -pointers_per_entry))
             if num_blocks > free_blocks or num_entries > free_entries:
-                self.warnings.append(f'{path.name}: no space left')
+                warnings.append(f'{path.name}: no space left')
                 continue
 
             m.make_file(name)
@@ -315,7 +347,11 @@ class HostDrive(DiskDrive):
 
             free_blocks -= num_blocks
             free_entries -= num_entries
-            self.host_paths[name] = path
+            host_paths[name] = path
+
+        self.image = image
+        self.host_paths = host_paths
+        self.warnings = warnings
 
     # The host copy may hold the original, unpadded content the
     # padded image content came from.
@@ -490,11 +526,15 @@ class CPMMachineMixin(_MachineBase):
     S_BDOSVER = 0xc
     F_OPEN = 0xf
     F_CLOSE = 0x10
+    F_DELETE = 0x13
     F_READ = 0x14
     F_WRITE = 0x15
     F_MAKE = 0x16
     F_RENAME = 0x17
     F_DMAOFF = 0x1a
+
+    __BDOS_BASE = 0x9c00
+    __BDOS_CODE_ENTRY = __BDOS_BASE + 0x11
 
     __CCP_BASE = 0x9400
     __CCP_READ_COMMAND = __CCP_BASE + 0x1aa
@@ -502,6 +542,12 @@ class CPMMachineMixin(_MachineBase):
     __CCP_RUN_COMMAND = __CCP_BASE + 0x398
 
     __BIOS_BASE = 0xaa00
+
+    # One RET per drive, right after the BIOS vectors: a
+    # file-committing BDOS call returns through the RET of the
+    # drive it works on, so its completion notifies that drive.
+    __COMMIT_RETURNS_BASE = __BIOS_BASE + 0x40
+
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
     def __init__(self, *,
@@ -527,7 +573,13 @@ class CPMMachineMixin(_MachineBase):
             self.__CCP_READ_COMMAND: self.on_read_ccp_command,
             self.__CCP_GET_COMMAND: None,
             self.__CCP_RUN_COMMAND: self.on_ccp_command,
+            self.__BDOS_CODE_ENTRY: self.on_bdos_entry,
         }
+
+        for i in range(len(self.__drives)):
+            addr = self.__COMMIT_RETURNS_BASE + i
+            assert addr not in self.__breakpoints
+            self.__breakpoints[addr] = self.__on_commit_return
 
         BIOS_VECTORS = (
             self.on_boot,
@@ -618,8 +670,7 @@ class CPMMachineMixin(_MachineBase):
         return importlib.resources.files('cpm80').joinpath(path).read_bytes()
 
     def on_boot(self) -> None:
-        BDOS_BASE = 0x9c00
-        self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
+        self.set_memory_block(self.__BDOS_BASE, self.__load_data('bdos.bin'))
 
         # The word at 0x0001 is how programs locate the BIOS vector
         # table, so it must point at WBOOT, the second vector.
@@ -629,13 +680,17 @@ class CPMMachineMixin(_MachineBase):
         for addr in self.__bios_vectors:
             self.set_memory_block(addr, z80.RET().encode())
 
+        for i in range(len(self.__drives)):
+            self.set_memory_block(self.__COMMIT_RETURNS_BASE + i,
+                                  z80.RET().encode())
+
         self.__disk_tables_heap = self.__BIOS_DISK_TABLES_HEAP_BASE
         self.__set_up_disk_tables()
 
         self.sp = 0x100
 
-        BDOS_ENTRY = BDOS_BASE + 0x11
-        self.set_memory_block(self.BDOS_ENTRY, z80.JP(BDOS_ENTRY).encode())
+        self.set_memory_block(self.BDOS_ENTRY,
+                              z80.JP(self.__BDOS_CODE_ENTRY).encode())
 
         CURRENT_DISK = 0
         self.set_memory_block(self.__CURRENT_DISK_ADDR,
@@ -644,6 +699,9 @@ class CPMMachineMixin(_MachineBase):
         self.on_wboot()
 
     def on_wboot(self) -> None:
+        for drive in self.__drives:
+            drive.on_warm_boot()
+
         self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
 
         DEFAULT_DMA = 0x80
@@ -724,6 +782,39 @@ class CPMMachineMixin(_MachineBase):
 
     def on_sectran(self) -> None:
         self.hl = self.__drive.translate_sector(self.bc)
+
+    # How drives learn that their files changed: every BDOS call
+    # enters through the single BDOS code entry, where a breakpoint
+    # shows us the function about to run.  For the functions that
+    # change what files a drive holds -- close, delete, make,
+    # rename -- the drive must be notified after the work is done,
+    # not at the entry, so the notification is arranged to happen
+    # on return: an extra return
+    # address is pushed on top of the caller's, addressing the RET
+    # belonging to the drive the call works on.  When BDOS finishes
+    # and returns, it first lands on that RET, whose breakpoint
+    # notifies the drive, and the RET itself then pops the caller's
+    # address and resumes it as if nothing happened.  The stack
+    # carries all the state: which drive to notify and where to
+    # continue.
+    def on_bdos_entry(self) -> None:
+        if self.c not in (self.F_CLOSE, self.F_DELETE, self.F_MAKE,
+                          self.F_RENAME):
+            return
+
+        DEFAULT_DRIVE = 0
+        fcb_drive = self.memory[self.de]
+        if fcb_drive == DEFAULT_DRIVE:
+            disk = self.memory[self.__CURRENT_DISK_ADDR] & 0xf
+        else:
+            disk = fcb_drive - 1
+
+        if disk < len(self.__drives):
+            self.__push(self.__COMMIT_RETURNS_BASE + disk)
+
+    def __on_commit_return(self) -> None:
+        disk = self.pc - self.__COMMIT_RETURNS_BASE
+        self.__drives[disk].on_file_commit()
 
     def on_breakpoint(self) -> None:
         handler = self.__breakpoints.get(self.pc)
