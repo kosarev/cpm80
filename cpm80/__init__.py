@@ -1113,13 +1113,21 @@ def main(commands: list[str] | None = None) -> None:
         image = DiskImage(DiskFormat(**params), data=disk_data)
         drive = DiskDrive(image)
 
-        m = I8080CPMMachine(drives=[drive], console_reader=console_reader)
-        m.run()
+        # The current directory mounts as drive B:.
+        host_drive = HostDrive()
+        for warning in host_drive.warnings:
+            print(f'cpm80: {warning}', file=sys.stderr)
+
+        m = I8080CPMMachine(drives=[drive, host_drive],
+                            console_reader=console_reader)
+        try:
+            m.run()
+        finally:
+            if not temp_disk:
+                disk_path.write_bytes(image.data)
+            host_drive.flush_files()
     except Error as e:
         sys.exit(f'cpm80: {e}')
-
-    if not temp_disk:
-        disk_path.write_bytes(image.data)
 
 
 if __name__ == '__main__':
