@@ -126,6 +126,12 @@ DISK_FORMATS = {
     # one less than it could be, likely due to a mistake, so the
     # last block is never used.
     'korvet': DiskFormat(num_reserved_tracks=4, num_blocks=389),
+
+    # A roomy synthetic format for drives mirroring host
+    # directories: nearly the 8M the file system supports.
+    'host': DiskFormat(sectors_per_track=64, num_reserved_tracks=1,
+                       block_size=16384, num_blocks=500,
+                       num_dir_entries=512),
 }
 
 
@@ -221,6 +227,95 @@ class DiskDrive:
         assert len(data) == SECTOR_SIZE
         sector = self.image.get_sector(self.current_sector, self.current_track)
         sector[:] = data
+
+
+# A drive mirroring a host directory: mounting snapshots the
+# directory's files onto a fresh in-memory disk under 8.3 names, as
+# many as fit.  Files the mount has to leave out are reported in
+# 'warnings'; 'host_paths' maps the CP/M names to the host files
+# they came from.
+class HostDrive(DiskDrive):
+    __NAME_CHARS = frozenset('ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                             '0123456789#$%&()-_@!')
+
+    def __init__(self, directory: str | pathlib.Path = '.', *,
+                 format: DiskFormat | None = None) -> None:
+        if format is None:
+            format = DISK_FORMATS['host']
+
+        self.directory = pathlib.Path(directory)
+        super().__init__(DiskImage(format))
+        self.remount()
+
+    # Only names already valid in CP/M mount, case aside; anything
+    # else is skipped rather than renamed.
+    def __make_cpm_name(self, host_name: str) -> str | None:
+        name, dot, ext = host_name.partition('.')
+        name = name.upper()
+        ext = ext.upper()
+
+        if not 1 <= len(name) <= 8:
+            return None
+        if dot and not 1 <= len(ext) <= 3:
+            return None
+        if not all(c in self.__NAME_CHARS for c in name + ext):
+            return None
+
+        return f'{name}.{ext}' if ext else name
+
+    def remount(self) -> None:
+        if not self.directory.is_dir():
+            raise Error(f'cannot mount {self.directory}: '
+                        'not a directory')
+
+        f = self.format
+        self.image = DiskImage(f)
+        self.host_paths: dict[str, pathlib.Path] = {}
+        self.warnings: list[str] = []
+
+        # Mirror the space accounting BDOS does: data blocks, and
+        # directory entries of 8 or 16 block pointers each.
+        DIR_ENTRY_SIZE = 32
+        num_dir_blocks = -(f.num_dir_entries * DIR_ENTRY_SIZE //
+                           -f.block_size)
+        free_blocks = f.num_blocks - num_dir_blocks
+        free_entries = f.num_dir_entries
+        pointers_per_entry = 8 if f.dsm_disk_size_max >= 0x100 else 16
+
+        m = I8080CPMMachine(drives=[self])
+        for path in sorted(self.directory.iterdir()):
+            if not path.is_file() or path.name.startswith('.'):
+                continue
+
+            name = self.__make_cpm_name(path.name)
+            if name is None:
+                self.warnings.append(
+                    f'{path.name}: not a valid CP/M filename')
+                continue
+
+            if name in self.host_paths:
+                taken_by = self.host_paths[name].name
+                self.warnings.append(
+                    f'{path.name}: the name {name} is already '
+                    f'taken by {taken_by}')
+                continue
+
+            data = path.read_bytes()
+            num_blocks = -(len(data) // -f.block_size)
+            num_entries = max(
+                1, -(num_blocks // -pointers_per_entry))
+            if num_blocks > free_blocks or num_entries > free_entries:
+                self.warnings.append(f'{path.name}: no space left')
+                continue
+
+            m.make_file(name)
+            if data:
+                m.write_file(data)
+            m.close_file()
+
+            free_blocks -= num_blocks
+            free_entries -= num_entries
+            self.host_paths[name] = path
 
 
 class KeyboardDevice:
