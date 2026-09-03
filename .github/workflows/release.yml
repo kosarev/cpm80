@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4.2.2
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade pycodestyle ruff pytest mypy setuptools wheel z80 platformdirs
+
+    - name: Run pycodestyle, ruff and mypy
+      run: |
+        pycodestyle .
+        ruff check .
+        mypy --config-file .mypy.ini cpm80 tests
+
+    - name: Install the package
+      run: pip install .
+
+    - name: Run tests
+      run: pytest tests
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4.2.2
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Build sdist and wheel
+      run: |
+        python -m pip install --upgrade build
+        python -m build
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
+
+  # Publishes to PyPI using OIDC Trusted Publishing (no stored tokens).
+  #
+  # One-time setup required in PyPI:
+  #   1. Log in at https://pypi.org and open the 'cpm80' project's
+  #      "Publishing" page.
+  #   2. Add a new Trusted Publisher with these values:
+  #        PyPI project name:  cpm80
+  #        Owner:              kosarev
+  #        Repository:         cpm80
+  #        Workflow filename:  release.yml
+  #        Environment name:   pypi
+  #
+  # One-time setup required in GitHub:
+  #   Go to Settings -> Environments -> New environment, name it "pypi".
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+
+    environment: pypi
+
+    steps:
+    - name: Download sdist and wheel
+      uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/*
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
