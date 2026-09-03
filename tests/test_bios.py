@@ -48,7 +48,7 @@ def test_default_dma() -> None:
     drive.image.get_sector(1, 0)[:] = marker
 
     # A read with no SETDMA call goes to the default DMA address.
-    m = cpm80.I8080CPMMachine(drive=drive)
+    m = cpm80.I8080CPMMachine(drives=[drive])
     drive.current_sector = 1
     m.on_read()
 
@@ -59,7 +59,7 @@ def test_default_dma() -> None:
 
 def test_sector_io_errors() -> None:
     drive = cpm80.DiskDrive()
-    m = cpm80.I8080CPMMachine(drive=drive)
+    m = cpm80.I8080CPMMachine(drives=[drive])
 
     # Transfers outside the disk report an error rather than crash
     # or alias into another track.

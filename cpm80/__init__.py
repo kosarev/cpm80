@@ -336,10 +336,20 @@ class CPMMachineMixin(_MachineBase):
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
-    def __init__(self, *, drive: DiskDrive | None = None,
+    def __init__(self, *,
+                 drives: collections.abc.Sequence[DiskDrive] | None = None,
                  console_reader: ConsoleReader | None = None,
                  console_writer: ConsoleWriter | None = None) -> None:
-        self.__drive = drive or DiskDrive()
+        if drives is None:
+            drives = DiskDrive(),
+
+        NUM_DRIVES_MAX = 16
+        if not 1 <= len(drives) <= NUM_DRIVES_MAX:
+            raise Error(f'1 to {NUM_DRIVES_MAX} drives supported, '
+                        f'got {len(drives)}')
+
+        self.__drives = tuple(drives)
+        self.__drive = self.__drives[0]
         self.__console_reader = console_reader or KeyboardDevice()
         self.__console_writer = console_writer or DisplayDevice()
         self.__done = False
@@ -395,42 +405,45 @@ class CPMMachineMixin(_MachineBase):
         return addr
 
     def __set_up_disk_tables(self) -> None:
-        f = self.__drive.format
-
-        # Shared by all identical drives.
-        dpb_disk_param_block = self.__allocate_disk_table_block(
-            f.spt_sectors_per_track.to_bytes(2, 'little') +
-            f.bsh_block_shift_factor.to_bytes(1, 'little') +
-            f.blm_allocation_block_mask.to_bytes(1, 'little') +
-            f.exm_extent_mask.to_bytes(1, 'little') +
-            f.dsm_disk_size_max.to_bytes(2, 'little') +
-            f.drm_max_dir_entry.to_bytes(2, 'little') +
-            f.al0_allocation_mask.to_bytes(1, 'little') +
-            f.al1_allocation_mask.to_bytes(1, 'little') +
-            f.cks_directory_check_size.to_bytes(2, 'little') +
-            f.off_system_tracks_offset.to_bytes(2, 'little'))
-
         # Shared by all drives.
         dirbuf_scratch_pad = self.__allocate_disk_table_block(b'\x00' * 128)
 
-        xlt_sector_translation_vector = 0x0000
-        bdos_scratch_pad1 = 0x0000
-        bdos_scratch_pad2 = 0x0000
-        bdos_scratch_pad3 = 0x0000
-        cks = (f.drm_max_dir_entry + 1) // 4 if f.removable else 0
-        csv_scratch_pad = self.__allocate_disk_table_block(b'\x00' * cks)
-        alv_scratch_pad = self.__allocate_disk_table_block(
-            b'\x00' * (f.dsm_disk_size_max // 8 + 1))
+        tables = []
+        for drive in self.__drives:
+            f = drive.format
 
-        self.__disk_header_table = self.__allocate_disk_table_block(
-            xlt_sector_translation_vector.to_bytes(2, 'little') +
-            bdos_scratch_pad1.to_bytes(2, 'little') +
-            bdos_scratch_pad2.to_bytes(2, 'little') +
-            bdos_scratch_pad3.to_bytes(2, 'little') +
-            dirbuf_scratch_pad.to_bytes(2, 'little') +
-            dpb_disk_param_block.to_bytes(2, 'little') +
-            csv_scratch_pad.to_bytes(2, 'little') +
-            alv_scratch_pad.to_bytes(2, 'little'))
+            dpb_disk_param_block = self.__allocate_disk_table_block(
+                f.spt_sectors_per_track.to_bytes(2, 'little') +
+                f.bsh_block_shift_factor.to_bytes(1, 'little') +
+                f.blm_allocation_block_mask.to_bytes(1, 'little') +
+                f.exm_extent_mask.to_bytes(1, 'little') +
+                f.dsm_disk_size_max.to_bytes(2, 'little') +
+                f.drm_max_dir_entry.to_bytes(2, 'little') +
+                f.al0_allocation_mask.to_bytes(1, 'little') +
+                f.al1_allocation_mask.to_bytes(1, 'little') +
+                f.cks_directory_check_size.to_bytes(2, 'little') +
+                f.off_system_tracks_offset.to_bytes(2, 'little'))
+
+            xlt_sector_translation_vector = 0x0000
+            bdos_scratch_pad1 = 0x0000
+            bdos_scratch_pad2 = 0x0000
+            bdos_scratch_pad3 = 0x0000
+            cks = (f.drm_max_dir_entry + 1) // 4 if f.removable else 0
+            csv_scratch_pad = self.__allocate_disk_table_block(b'\x00' * cks)
+            alv_scratch_pad = self.__allocate_disk_table_block(
+                b'\x00' * (f.dsm_disk_size_max // 8 + 1))
+
+            tables.append(self.__allocate_disk_table_block(
+                xlt_sector_translation_vector.to_bytes(2, 'little') +
+                bdos_scratch_pad1.to_bytes(2, 'little') +
+                bdos_scratch_pad2.to_bytes(2, 'little') +
+                bdos_scratch_pad3.to_bytes(2, 'little') +
+                dirbuf_scratch_pad.to_bytes(2, 'little') +
+                dpb_disk_param_block.to_bytes(2, 'little') +
+                csv_scratch_pad.to_bytes(2, 'little') +
+                alv_scratch_pad.to_bytes(2, 'little')))
+
+        self.__disk_header_tables = tuple(tables)
 
     @staticmethod
     def __load_data(path: str) -> bytes:
@@ -501,12 +514,13 @@ class CPMMachineMixin(_MachineBase):
         self.__drive.current_track = 0
 
     def on_seldsk(self) -> None:
-        DISK_A = 0
-        if self.c == DISK_A:
-            self.hl = self.__disk_header_table
+        disk = self.c
+        if disk >= len(self.__drives):
+            self.hl = 0  # No such disk.
             return
 
-        self.hl = 0
+        self.__drive = self.__drives[disk]
+        self.hl = self.__disk_header_tables[disk]
 
     def on_settrk(self) -> None:
         self.__drive.current_track = self.bc
@@ -783,11 +797,12 @@ class CPMMachineMixin(_MachineBase):
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
-    def __init__(self, *, drive: DiskDrive | None = None,
+    def __init__(self, *,
+                 drives: collections.abc.Sequence[DiskDrive] | None = None,
                  console_reader: ConsoleReader | None = None,
                  console_writer: ConsoleWriter | None = None) -> None:
         z80.I8080Machine.__init__(self)
-        CPMMachineMixin.__init__(self, drive=drive,
+        CPMMachineMixin.__init__(self, drives=drives,
                                  console_reader=console_reader,
                                  console_writer=console_writer)
 
@@ -839,7 +854,7 @@ def main(commands: list[str] | None = None) -> None:
         image = DiskImage(DiskFormat(**params), data=disk_data)
         drive = DiskDrive(image)
 
-        m = I8080CPMMachine(drive=drive, console_reader=console_reader)
+        m = I8080CPMMachine(drives=[drive], console_reader=console_reader)
         m.run()
     except Error as e:
         sys.exit(f'cpm80: {e}')
