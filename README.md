@@ -54,7 +54,7 @@ console_reader = cpm80.StringKeyboard(*COMMANDS)
 m = cpm80.I8080CPMMachine(console_reader=console_reader)
 m.run()
 ```
-[string_keyboard.py](https://github.com/kosarev/cpm80/blob/master/examples/string_keyboard.py)
+[string_keyboard.py](https://github.com/kosarev/cpm80/blob/main/examples/string_keyboard.py)
 
 Output:
 ```
@@ -85,7 +85,7 @@ m.run()
 
 print(d.string)
 ```
-[string_display.py](https://github.com/kosarev/cpm80/blob/master/examples/string_display.py)
+[string_display.py](https://github.com/kosarev/cpm80/blob/main/examples/string_display.py)
 
 
 ## Making BDOS calls
@@ -102,7 +102,7 @@ m.bdos_call(m.C_WRITESTR, de=STR_ADDR)
 
 m.write_str('World!\n')
 ```
-[bdos_call.py](https://github.com/kosarev/cpm80/blob/master/examples/bdos_call.py)
+[bdos_call.py](https://github.com/kosarev/cpm80/blob/main/examples/bdos_call.py)
 
 
 ## Working with files
@@ -124,4 +124,4 @@ m.open_file('file.txt')
 print(m.read_file())
 m.close_file()
 ```
-[doing_files.py](https://github.com/kosarev/cpm80/blob/master/examples/doing_files.py)
+[doing_files.py](https://github.com/kosarev/cpm80/blob/main/examples/doing_files.py)
