@@ -4,6 +4,7 @@ import pathlib
 import sys
 import termios
 import tty
+import typing
 
 import appdirs
 import z80
@@ -184,7 +185,7 @@ class DiskDrive:
         sector = self.image.get_sector(self.current_sector, self.current_track)
         return bytes(sector)
 
-    def write_sector(self, data: bytes | memoryview) -> None:
+    def write_sector(self, data: bytes | bytearray | memoryview) -> None:
         assert len(data) == SECTOR_SIZE
         sector = self.image.get_sector(self.current_sector, self.current_track)
         sector[:] = data
@@ -252,7 +253,27 @@ class StringDisplay:
         return ''.join(chr(c) for c in self.__output)
 
 
-class CPMMachineMixin:
+# Any object with an input() method works as a console reader, and any
+# object with an output() method as a console writer.
+class ConsoleReader(typing.Protocol):
+    def input(self) -> int | None:
+        ...
+
+
+class ConsoleWriter(typing.Protocol):
+    def output(self, c: int) -> None:
+        ...
+
+
+# The mixin expects to be combined with a z80 machine class.
+# This declares that to the type checker without imposing a runtime base.
+if typing.TYPE_CHECKING:
+    _MachineBase = z80.I8080Machine
+else:
+    _MachineBase = object
+
+
+class CPMMachineMixin(_MachineBase):
     __REBOOT = 0x0000
     __DEFAULT_FCB = 0x005c
     __TPA = 0x0100
@@ -276,14 +297,16 @@ class CPMMachineMixin:
     __BIOS_BASE = 0xaa00
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
-    def __init__(self, *, drive=None, console_reader=None,
-                 console_writer=None):
+    def __init__(self, *, drive: DiskDrive | None = None,
+                 console_reader: ConsoleReader | None = None,
+                 console_writer: ConsoleWriter | None = None) -> None:
         self.__drive = drive or DiskDrive()
         self.__console_reader = console_reader or KeyboardDevice()
         self.__console_writer = console_writer or DisplayDevice()
         self.__done = False
 
-        self.__breakpoints = {
+        self.__breakpoints: dict[
+                int, collections.abc.Callable[[], None] | None] = {
             self.__CCP_READ_COMMAND: self.on_read_ccp_command,
             self.__CCP_GET_COMMAND: None,
             self.__CCP_RUN_COMMAND: self.on_ccp_command,
@@ -308,7 +331,8 @@ class CPMMachineMixin:
             self.on_listst,
             self.on_sectran)
 
-        self.__bios_vectors = {}
+        self.__bios_vectors: dict[
+            int, collections.abc.Callable[[], None]] = {}
         for i, handler in enumerate(BIOS_VECTORS):
             addr = self.__BIOS_BASE + i * 3
 
@@ -321,17 +345,17 @@ class CPMMachineMixin:
         for addr in self.__breakpoints:
             self.set_breakpoint(addr)
 
-        self.__ccp_command_line = None
+        self.__ccp_command_line: str | None = None
 
         self.on_boot()
 
-    def __allocate_disk_table_block(self, image):
+    def __allocate_disk_table_block(self, image: bytes) -> int:
         addr = self.__disk_tables_heap
         self.__disk_tables_heap += len(image)
         self.set_memory_block(addr, image)
         return addr
 
-    def __set_up_disk_tables(self):
+    def __set_up_disk_tables(self) -> None:
         f = self.__drive.format
 
         # Shared by all identical drives.
@@ -370,10 +394,10 @@ class CPMMachineMixin:
             alv_scratch_pad.to_bytes(2, 'little'))
 
     @staticmethod
-    def __load_data(path):
+    def __load_data(path: str) -> bytes:
         return importlib.resources.files('cpm80').joinpath(path).read_bytes()
 
-    def on_boot(self):
+    def on_boot(self) -> None:
         BDOS_BASE = 0x9c00
         self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
 
@@ -404,15 +428,15 @@ class CPMMachineMixin:
         self.c = CURRENT_DISK
         self.on_wboot()
 
-    def on_wboot(self):
+    def on_wboot(self) -> None:
         self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
         self.pc = self.__CCP_BASE
 
-    def on_const(self):
+    def on_const(self) -> None:
         # TODO
         self.a = 0
 
-    def on_conin(self):
+    def on_conin(self) -> None:
         c = self.__console_reader.input()
         if c is None:
             self.__done = True
@@ -420,22 +444,22 @@ class CPMMachineMixin:
 
         self.a = c
 
-    def on_conout(self):
+    def on_conout(self) -> None:
         self.__console_writer.output(self.c)
 
-    def on_list(self):
+    def on_list(self) -> None:
         assert 0  # TODO
 
-    def on_punch(self):
+    def on_punch(self) -> None:
         assert 0  # TODO
 
-    def on_reader(self):
+    def on_reader(self) -> None:
         assert 0  # TODO
 
-    def on_home(self):
+    def on_home(self) -> None:
         self.__drive.current_track = 0
 
-    def on_seldsk(self):
+    def on_seldsk(self) -> None:
         DISK_A = 0
         if self.c == DISK_A:
             self.hl = self.__disk_header_table
@@ -443,49 +467,51 @@ class CPMMachineMixin:
 
         self.hl = 0
 
-    def on_settrk(self):
+    def on_settrk(self) -> None:
         self.__drive.current_track = self.bc
 
-    def on_setsec(self):
+    def on_setsec(self) -> None:
         self.__drive.current_sector = self.bc
 
-    def on_setdma(self):
+    def on_setdma(self) -> None:
         self.__dma = self.bc
 
-    def on_read(self):
+    def on_read(self) -> None:
         self.set_memory_block(self.__dma, self.__drive.read_sector())
         self.a = 0  # Read OK.
 
-    def on_write(self):
+    def on_write(self) -> None:
         data = self.memory[self.__dma:self.__dma + SECTOR_SIZE]
         self.__drive.write_sector(data)
         self.a = 0  # Write OK.
 
-    def on_listst(self):
+    def on_listst(self) -> None:
         assert 0  # TODO
 
-    def on_sectran(self):
+    def on_sectran(self) -> None:
         self.hl = self.__drive.translate_sector(self.bc)
 
-    def on_breakpoint(self):
+    def on_breakpoint(self) -> None:
         handler = self.__breakpoints.get(self.pc)
         if handler:
             handler()
 
     # TODO: Should be implemented in the CPU package.
-    def __push(self, nn):
+    def __push(self, nn: int) -> None:
+        memory = self.memory
+        assert isinstance(memory, memoryview)
         self.sp = (self.sp - 1) & 0xffff
-        self.memory[self.sp] = (nn >> 8) & 0xff
+        memory[self.sp] = (nn >> 8) & 0xff
         self.sp = (self.sp - 1) & 0xffff
-        self.memory[self.sp] = (nn >> 0) & 0xff
+        memory[self.sp] = (nn >> 0) & 0xff
 
-    def __reach_ccp_command_processing(self):
+    def __reach_ccp_command_processing(self) -> None:
         while self.pc != self.__CCP_GET_COMMAND:
             events = super().run()
             if events & self._BREAKPOINT_HIT:
                 self.on_breakpoint()
 
-    def bdos_call(self, entry, *, de=None):
+    def bdos_call(self, entry: int, *, de: int | None = None) -> None:
         # Make sure CCP got control and initialised the system.
         self.__reach_ccp_command_processing()
 
@@ -498,14 +524,13 @@ class CPMMachineMixin:
         # Execute the call.
         self.__reach_ccp_command_processing()
 
-    def write_str(self, s, *, addr=None):
+    def write_str(self, s: str, *, addr: int | None = None) -> None:
         if addr is None:
             addr = self.__TPA
-        s = s.encode('ascii') + b'$'
-        self.set_memory_block(addr, s)
+        self.set_memory_block(addr, s.encode('ascii') + b'$')
         self.bdos_call(self.C_WRITESTR, de=addr)
 
-    def get_bdos_version(self):
+    def get_bdos_version(self) -> tuple[int, int, int]:
         self.bdos_call(self.S_BDOSVER)
         system_type = self.b
         cpm_version = self.a
@@ -515,19 +540,19 @@ class CPMMachineMixin:
 
         return cpm_version, cpm_type, machine_type
 
-    def __make_fcb(self, filename):
-        filename, type = filename.split('.', maxsplit=1)
+    def __make_fcb(self, filename: str) -> bytes:
+        name, type = filename.split('.', maxsplit=1)
 
         DEFAULT_DRIVE = 0
         drive = DEFAULT_DRIVE
 
-        filename = filename.upper().encode('ascii')
-        filename += b' ' * (8 - len(filename))
-        assert len(filename) == 8
+        name_field = name.upper().encode('ascii')
+        name_field += b' ' * (8 - len(name_field))
+        assert len(name_field) == 8
 
-        type = type.upper().encode('ascii')
-        type += b' ' * (3 - len(type))
-        assert len(type) == 3
+        type_field = type.upper().encode('ascii')
+        type_field += b' ' * (3 - len(type_field))
+        assert len(type_field) == 3
 
         extent = 0
 
@@ -543,8 +568,8 @@ class CPMMachineMixin:
         r2 = b'\x00'
 
         return (drive.to_bytes(1, 'little') +
-                filename +
-                type +
+                name_field +
+                type_field +
                 extent.to_bytes(1, 'little') +
                 s1_reserved +
                 s2_reserved +
@@ -556,7 +581,7 @@ class CPMMachineMixin:
     # TODO: Support custom FCB addresses, explicit drive
     # specification, file attributes, etc.
     # TODO: Seems to support wildcards?
-    def open_file(self, filename):
+    def open_file(self, filename: str) -> int:
         FCB = self.__DEFAULT_FCB
         self.set_memory_block(FCB, self.__make_fcb(filename))
 
@@ -570,7 +595,7 @@ class CPMMachineMixin:
         return dir_code
 
     # TODO: Support custom FCB addresses.
-    def close_file(self):
+    def close_file(self) -> int:
         self.bdos_call(self.F_CLOSE, de=self.__DEFAULT_FCB)
         dir_code = self.a
         if dir_code == 0xff:
@@ -580,23 +605,23 @@ class CPMMachineMixin:
         return dir_code
 
     # TODO: Support custom FCB and DMA addresses.
-    def read_file(self, num_sectors=1):
+    def read_file(self, num_sectors: int = 1) -> bytes:
         DMA = self.__TPA
         self.set_dma(DMA)
 
-        sectors = []
+        sectors: list[bytes] = []
         while len(sectors) < num_sectors:
             self.bdos_call(self.F_READ, de=self.__DEFAULT_FCB)
 
             if self.a != 0:
                 break
 
-            sectors.append(self.memory[DMA:DMA + SECTOR_SIZE])
+            sectors.append(bytes(self.memory[DMA:DMA + SECTOR_SIZE]))
 
         return b''.join(sectors)
 
     # TODO: Support custom FCB and DMA addresses.
-    def write_file(self, data):
+    def write_file(self, data: bytes) -> None:
         DMA = self.__TPA
         self.set_dma(DMA)
 
@@ -616,7 +641,7 @@ class CPMMachineMixin:
     # TODO: Throw cpm80 exceptions on problematic input.
     # TODO: Prohibit wildcards.
     # TODO: Delete existing files before creating new ones.
-    def make_file(self, filename):
+    def make_file(self, filename: str) -> int:
         FCB = self.__DEFAULT_FCB
         self.set_memory_block(FCB, self.__make_fcb(filename))
 
@@ -633,7 +658,7 @@ class CPMMachineMixin:
     # TODO: Support custom FCB addresses, explicit drive
     # specification, file attributes, etc.
     # TODO: Prohibit wildcards?
-    def rename_file(self, old, new):
+    def rename_file(self, old: str, new: str) -> int:
         FCB = self.__DEFAULT_FCB
         self.set_memory_block(FCB, (self.__make_fcb(old)[:16] +
                                     self.__make_fcb(new)[:16]))
@@ -647,10 +672,10 @@ class CPMMachineMixin:
 
         return dir_code
 
-    def set_dma(self, dma):
+    def set_dma(self, dma: int) -> None:
         self.bdos_call(self.F_DMAOFF, de=dma)
 
-    def on_read_ccp_command(self):
+    def on_read_ccp_command(self) -> None:
         assert self.pc == self.__CCP_READ_COMMAND
 
         COMMAND_SIZE_ADDR = self.__CCP_BASE + 7
@@ -660,15 +685,19 @@ class CPMMachineMixin:
         b = bytes(self.memory[COMMAND_BUFF:COMMAND_BUFF + size])
         self.__ccp_command_line = b.decode('ascii')
 
-    def on_ccp_command(self):
+    def on_ccp_command(self) -> None:
         assert self.pc == self.__CCP_RUN_COMMAND
+        assert self.__ccp_command_line is not None
         *args, = self.__ccp_command_line.split()
         if len(args) > 0:
             command, *args = args
             if command == 'exit':
                 self.__done = True
 
-    def run(self):
+    # Unlike the CPU's run(), which returns on every event, this runs
+    # the machine until the emulation is done, hence the deliberate
+    # signature mismatch.
+    def run(self) -> None:  # type: ignore[override]
         while not self.__done:
             events = super().run()
             if events & self._BREAKPOINT_HIT:
@@ -676,15 +705,16 @@ class CPMMachineMixin:
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
-    def __init__(self, *, drive=None, console_reader=None,
-                 console_writer=None):
+    def __init__(self, *, drive: DiskDrive | None = None,
+                 console_reader: ConsoleReader | None = None,
+                 console_writer: ConsoleWriter | None = None) -> None:
         z80.I8080Machine.__init__(self)
         CPMMachineMixin.__init__(self, drive=drive,
                                  console_reader=console_reader,
                                  console_writer=console_writer)
 
 
-def main(commands=None):
+def main(commands: list[str] | None = None) -> None:
     if commands is None:
         commands = sys.argv[1:]
 
