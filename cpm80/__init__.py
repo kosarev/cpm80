@@ -293,6 +293,7 @@ else:
 
 class CPMMachineMixin(_MachineBase):
     __REBOOT = 0x0000
+    __CURRENT_DISK_ADDR = 0x0004
     __DEFAULT_FCB = 0x005c
     __TPA = 0x0100
 
@@ -419,9 +420,12 @@ class CPMMachineMixin(_MachineBase):
         BDOS_BASE = 0x9c00
         self.set_memory_block(BDOS_BASE, self.__load_data('bdos.bin'))
 
+        # The word at 0x0001 is how programs locate the BIOS vector
+        # table, so it must point at WBOOT, the second vector.
         JMP = b'\xc3'
-        JMP_BIOS = JMP + self.__BIOS_BASE.to_bytes(2, 'little')
-        self.set_memory_block(self.__REBOOT, JMP_BIOS)
+        WBOOT = self.__BIOS_BASE + 3
+        JMP_WBOOT = JMP + WBOOT.to_bytes(2, 'little')
+        self.set_memory_block(self.__REBOOT, JMP_WBOOT)
 
         for addr in self.__bios_vectors:
             RET = b'\xc9'
@@ -439,15 +443,17 @@ class CPMMachineMixin(_MachineBase):
         self.set_memory_block(self.BDOS_ENTRY, JMP_BDOS)
 
         CURRENT_DISK = 0
-        CURRENT_DISK_ADDR = 0x0004
-        self.set_memory_block(CURRENT_DISK_ADDR,
+        self.set_memory_block(self.__CURRENT_DISK_ADDR,
                               CURRENT_DISK.to_bytes(1, 'little'))
 
-        self.c = CURRENT_DISK
         self.on_wboot()
 
     def on_wboot(self) -> None:
         self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
+
+        # CCP takes the disk to use in C.
+        self.c = self.memory[self.__CURRENT_DISK_ADDR]
+
         self.pc = self.__CCP_BASE
 
     def on_const(self) -> None:
