@@ -1,7 +1,7 @@
 import cpm80
 
 
-def test_basic():
+def test_basic() -> None:
     k = cpm80.StringKeyboard('user 0', 'dir', 'type a.txt')
 
     input = ''

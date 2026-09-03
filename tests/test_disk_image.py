@@ -1,7 +1,7 @@
 import cpm80
 
 
-def test_spec():
+def test_spec() -> None:
     assert cpm80.DiskImage.parse_header(
         b'cpm80 disk image <https://pypi.org/project/cpm80>\n'
         b'sectors_per_track=40 num_reserved_tracks=2 block_size=2048 '

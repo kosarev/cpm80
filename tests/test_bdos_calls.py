@@ -3,13 +3,13 @@ import pytest
 import cpm80
 
 
-def test_c_writestr(capsys):
+def test_c_writestr(capsys: pytest.CaptureFixture[str]) -> None:
     m = cpm80.I8080CPMMachine()
     m.write_str('abc')
     assert capsys.readouterr().out == 'abc'
 
 
-def test_s_bdosver():
+def test_s_bdosver() -> None:
     m = cpm80.I8080CPMMachine()
 
     CPM_VERSION_2_2 = 0x22
@@ -19,7 +19,7 @@ def test_s_bdosver():
                                     CPM_TYPE_PLAIN)
 
 
-def test_file_read_write():
+def test_file_read_write() -> None:
     m = cpm80.I8080CPMMachine()
     m.make_file('file.bin')
     m.write_file(b'abc')
@@ -31,7 +31,7 @@ def test_file_read_write():
     m.close_file()
 
 
-def test_file_rename():
+def test_file_rename() -> None:
     m = cpm80.I8080CPMMachine()
     m.make_file('file.bin')
     m.close_file()

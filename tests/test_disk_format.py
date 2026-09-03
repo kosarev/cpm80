@@ -3,7 +3,7 @@ import pytest
 import cpm80
 
 
-def test_basic():
+def test_basic() -> None:
     assert cpm80.DiskFormat().disk_size == 800 * 1024
     assert cpm80.DISK_FORMATS['default'].disk_size == 800 * 1024
     assert cpm80.DISK_FORMATS['korvet'].disk_size == 798 * 1024
@@ -12,7 +12,7 @@ def test_basic():
         cpm80.DiskFormat(block_size=1024, num_blocks=0x101)
 
 
-def test_spec():
+def test_spec() -> None:
     assert cpm80.DiskFormat.parse_spec([
         'sectors_per_track=40',
         'num_reserved_tracks=2',
