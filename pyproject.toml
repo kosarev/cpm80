@@ -36,6 +36,7 @@ classifiers = [
   'Topic :: Software Development :: Libraries',
   'Topic :: System :: Emulators',
   'Topic :: System :: Operating System',
+  'Typing :: Typed',
 ]
 
 [project.urls]
@@ -48,7 +49,9 @@ cpm80 = 'cpm80:main'
 packages = ['cpm80']
 
 [tool.setuptools.package-data]
-cpm80 = ['*.bin']
+# py.typed is the PEP 561 marker telling type checkers the package
+# carries type information.
+cpm80 = ['*.bin', 'py.typed']
 
 [tool.ruff]
 # Anchors the ruff project root, so the cpm80 package is recognised as
