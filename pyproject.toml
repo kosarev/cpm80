@@ -1,3 +1,55 @@
-# Anchors the ruff project root, so the cpm80 package is recognized as
-# first-party regardless of the directory ruff is invoked from.
+[build-system]
+requires = ['setuptools>=61.0', 'wheel']
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = 'cpm80'
+version = '1.0a7'
+description = 'CP/M-80 2.2 emulator with API'
+readme = 'README.md'
+license = {text = 'MIT'}
+authors = [
+  {name = 'Ivan Kosarev', email = 'mail@ivankosarev.com'}
+]
+requires-python = '>=3.10'
+dependencies = [
+  'z80',
+  'appdirs',
+]
+classifiers = [
+  'Development Status :: 3 - Alpha',
+  'Environment :: Console',
+  'Intended Audience :: Developers',
+  'Intended Audience :: Education',
+  'Intended Audience :: End Users/Desktop',
+  'Intended Audience :: Information Technology',
+  'Operating System :: OS Independent',
+  'Programming Language :: Python :: 3',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: 3.13',
+  'Programming Language :: Python :: Implementation :: CPython',
+  'Topic :: Education',
+  'Topic :: Games/Entertainment',
+  'Topic :: Software Development',
+  'Topic :: Software Development :: Libraries',
+  'Topic :: System :: Emulators',
+  'Topic :: System :: Operating System',
+]
+
+[project.urls]
+Homepage = 'https://github.com/kosarev/cpm80/'
+
+[project.scripts]
+cpm80 = 'cpm80:main'
+
+[tool.setuptools]
+packages = ['cpm80']
+
+[tool.setuptools.package-data]
+cpm80 = ['*.bin']
+
 [tool.ruff]
+# Anchors the ruff project root, so the cpm80 package is recognised as
+# first-party regardless of the directory ruff is invoked from.
