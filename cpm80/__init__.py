@@ -733,7 +733,7 @@ class CPMMachineMixin(_MachineBase):
 
         dir_code = self.a
         if dir_code == 0xff:
-            raise Error(f'cannot open file: F_RENAME returned {dir_code}: '
+            raise Error(f'cannot rename file: F_RENAME returned {dir_code}: '
                         'file not found')
 
         return dir_code

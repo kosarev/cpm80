@@ -59,7 +59,7 @@ def test_file_rename() -> None:
     m.make_file('file.bin')
     m.close_file()
 
-    with pytest.raises(cpm80.Error):
+    with pytest.raises(cpm80.Error, match='cannot rename file'):
         m.rename_file('xfile.bin', 'file2.bin')
 
     m.rename_file('file.bin', 'file2.bin')
