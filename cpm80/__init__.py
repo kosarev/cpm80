@@ -1014,8 +1014,8 @@ class CPMMachineMixin(_MachineBase):
 
         dir_code = self.a
         if dir_code == 0xff:
-            # TODO: No more directory space is available.
-            assert 0
+            raise Error(f'cannot make file: F_MAKE returned {dir_code}: '
+                        'no directory space')
 
         return dir_code
 
@@ -1120,6 +1120,51 @@ class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
         CPMMachineMixin.__init__(self, drives=drives,
                                  console_reader=console_reader,
                                  console_writer=console_writer)
+
+
+# The files of a disk image, accessed through CP/M itself: the
+# operations run on a scratch machine with the image as its disk,
+# so the one file system implementation in play is the real BDOS.
+class FileSystem:
+    def __init__(self, image: DiskImage) -> None:
+        self.image = image
+        self.__machine = I8080CPMMachine(
+            drives=[DiskDrive(image)],
+            console_writer=StringDisplay())
+
+    def names(self) -> list[str]:
+        names = []
+        name = self.__machine.search_first('????????.???')
+        while name is not None:
+            names.append(name)
+            name = self.__machine.search_next()
+        return names
+
+    def read(self, filename: str) -> bytes:
+        self.__machine.open_file(filename)
+        data = self.__machine.read_file()
+        self.__machine.close_file()
+        return data
+
+    # The file must not exist.  On errors, such as running out of
+    # space, no partial file is left behind.
+    def write(self, filename: str, data: bytes) -> None:
+        self.__machine.make_file(filename)
+        try:
+            self.__machine.write_file(data)
+        except Error:
+            # Closing first records the partial file's blocks in
+            # the directory; deleting straight away would leave
+            # them allocated, as deletion frees what the directory
+            # lists.
+            self.__machine.close_file()
+            self.__machine.delete_file(filename)
+            raise
+
+        self.__machine.close_file()
+
+    def delete(self, filename: str) -> None:
+        self.__machine.delete_file(filename)
 
 
 def main(commands: list[str] | None = None) -> None:
