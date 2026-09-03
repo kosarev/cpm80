@@ -53,3 +53,7 @@ cpm80 = ['*.bin']
 [tool.ruff]
 # Anchors the ruff project root, so the cpm80 package is recognised as
 # first-party regardless of the directory ruff is invoked from.
+
+[tool.ruff.lint]
+# Reject needlessly quoted type annotations.
+extend-select = ['UP037']
