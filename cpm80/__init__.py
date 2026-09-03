@@ -533,6 +533,8 @@ class CPMMachineMixin(_MachineBase):
     S_BDOSVER = 0xc
     F_OPEN = 0xf
     F_CLOSE = 0x10
+    F_SFIRST = 0x11
+    F_SNEXT = 0x12
     F_DELETE = 0x13
     F_READ = 0x14
     F_WRITE = 0x15
@@ -1033,6 +1035,51 @@ class CPMMachineMixin(_MachineBase):
                         'file not found')
 
         return dir_code
+
+    # TODO: Support custom FCB addresses, explicit drive
+    # specification, etc.
+    def delete_file(self, filename: str) -> int:
+        FCB = self.__DEFAULT_FCB
+        self.set_memory_block(FCB, self.__make_fcb(filename))
+
+        self.bdos_call(self.F_DELETE, de=FCB)
+
+        dir_code = self.a
+        if dir_code == 0xff:
+            raise Error(f'cannot delete file: F_DELETE returned '
+                        f'{dir_code}: file not found')
+
+        return dir_code
+
+    def __found_name(self) -> str | None:
+        dir_code = self.a
+        if dir_code == 0xff:
+            return None
+
+        # The matched directory entry sits in the DMA buffer.
+        DIR_ENTRY_SIZE = 32
+        offset = self.__TPA + dir_code * DIR_ENTRY_SIZE
+        entry = self.memory[offset:offset + DIR_ENTRY_SIZE]
+
+        # Mask out the attribute bits.
+        name = bytes(b & 0x7f for b in entry[1:9]).decode().strip()
+        type = bytes(b & 0x7f for b in entry[9:12]).decode().strip()
+        return f'{name}.{type}' if type else name
+
+    # Searches match '?' in the pattern against any character.
+    # search_next() continues the search of the last
+    # search_first(); file operations in between invalidate it.
+    def search_first(self, pattern: str) -> str | None:
+        FCB = self.__DEFAULT_FCB
+        self.set_memory_block(FCB, self.__make_fcb(pattern))
+        self.set_dma(self.__TPA)
+
+        self.bdos_call(self.F_SFIRST, de=FCB)
+        return self.__found_name()
+
+    def search_next(self) -> str | None:
+        self.bdos_call(self.F_SNEXT, de=self.__DEFAULT_FCB)
+        return self.__found_name()
 
     def set_dma(self, dma: int) -> None:
         self.bdos_call(self.F_DMAOFF, de=dma)

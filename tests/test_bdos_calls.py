@@ -26,6 +26,40 @@ def test_filename_validation() -> None:
             m.make_file(bad)
 
 
+def test_file_search() -> None:
+    m = cpm80.I8080CPMMachine()
+
+    for filename in ('a.txt', 'b.dat', 'c.txt'):
+        m.make_file(filename)
+        m.close_file()
+
+    names = []
+    name = m.search_first('????????.???')
+    while name is not None:
+        names.append(name)
+        name = m.search_next()
+    assert names == ['A.TXT', 'B.DAT', 'C.TXT']
+
+    assert m.search_first('????????.txt') == 'A.TXT'
+    assert m.search_next() == 'C.TXT'
+    assert m.search_next() is None
+
+    assert m.search_first('missing.txt') is None
+
+
+def test_file_delete() -> None:
+    m = cpm80.I8080CPMMachine()
+    m.make_file('x.txt')
+    m.close_file()
+
+    m.delete_file('x.txt')
+
+    with pytest.raises(cpm80.Error, match='cannot open file'):
+        m.open_file('x.txt')
+    with pytest.raises(cpm80.Error, match='cannot delete file'):
+        m.delete_file('x.txt')
+
+
 def test_c_writestr(capsys: pytest.CaptureFixture[str]) -> None:
     m = cpm80.I8080CPMMachine()
     m.write_str('abc')
