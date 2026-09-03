@@ -33,3 +33,18 @@ def test_bios_vectors_via_reboot_jump() -> None:
 
     assert d.string.startswith('A')
     assert 'A>' in d.string
+
+
+def test_default_dma() -> None:
+    drive = cpm80.DiskDrive()
+    marker = bytes(range(128))
+    drive.image.get_sector(1, 0)[:] = marker
+
+    # A read with no SETDMA call goes to the default DMA address.
+    m = cpm80.I8080CPMMachine(drive=drive)
+    drive.current_sector = 1
+    m.on_read()
+
+    DEFAULT_DMA = 0x80
+    assert bytes(m.memory[DEFAULT_DMA:DEFAULT_DMA + 128]) == marker
+    assert m.a == 0

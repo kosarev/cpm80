@@ -441,8 +441,6 @@ class CPMMachineMixin(_MachineBase):
 
         self.sp = 0x100
 
-        self.__dma_addr = 0x80
-
         BDOS_ENTRY = BDOS_BASE + 0x11
         JMP_BDOS = JMP + BDOS_ENTRY.to_bytes(2, 'little')
         self.set_memory_block(self.BDOS_ENTRY, JMP_BDOS)
@@ -455,6 +453,9 @@ class CPMMachineMixin(_MachineBase):
 
     def on_wboot(self) -> None:
         self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
+
+        DEFAULT_DMA = 0x80
+        self.__dma = DEFAULT_DMA
 
         # CCP takes the disk to use in C.
         self.c = self.memory[self.__CURRENT_DISK_ADDR]
