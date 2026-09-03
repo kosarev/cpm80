@@ -442,14 +442,11 @@ class CPMMachineMixin(_MachineBase):
 
         # The word at 0x0001 is how programs locate the BIOS vector
         # table, so it must point at WBOOT, the second vector.
-        JMP = b'\xc3'
         WBOOT = self.__BIOS_BASE + 3
-        JMP_WBOOT = JMP + WBOOT.to_bytes(2, 'little')
-        self.set_memory_block(self.__REBOOT, JMP_WBOOT)
+        self.set_memory_block(self.__REBOOT, z80.JP(WBOOT).encode())
 
         for addr in self.__bios_vectors:
-            RET = b'\xc9'
-            self.set_memory_block(addr, RET)
+            self.set_memory_block(addr, z80.RET().encode())
 
         self.__disk_tables_heap = self.__BIOS_DISK_TABLES_HEAP_BASE
         self.__set_up_disk_tables()
@@ -457,8 +454,7 @@ class CPMMachineMixin(_MachineBase):
         self.sp = 0x100
 
         BDOS_ENTRY = BDOS_BASE + 0x11
-        JMP_BDOS = JMP + BDOS_ENTRY.to_bytes(2, 'little')
-        self.set_memory_block(self.BDOS_ENTRY, JMP_BDOS)
+        self.set_memory_block(self.BDOS_ENTRY, z80.JP(BDOS_ENTRY).encode())
 
         CURRENT_DISK = 0
         self.set_memory_block(self.__CURRENT_DISK_ADDR,

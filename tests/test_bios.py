@@ -6,6 +6,8 @@
 #
 #   Published under the MIT license.
 
+import z80
+
 import cpm80
 
 
@@ -17,18 +19,23 @@ def test_bios_vectors_via_reboot_jump() -> None:
     # off the fresh stack, and the jump at zero warm-boots into the
     # CCP, which proves the stored address is WBOOT itself and not
     # some other vector.
-    PROGRAM = bytes((
-        0x2a, 0x01, 0x00,   # lhld 0x0001
-        0x11, 0x09, 0x00,   # lxi d, 9
-        0x19,               # dad d
-        0x0e, ord('A'),     # mvi c, 'A'
-        0xe9))              # pchl
+    TPA = 0x100
+    code = z80.Code()
+    code.start_block(TPA)
+    code.add(
+        z80.LD(z80.HL, z80.At(0x0001)),
+        z80.LD(z80.DE, 9),
+        z80.ADD(z80.HL, z80.DE),
+        z80.LD(z80.C, ord('A')),
+        z80.JP(z80.At(z80.HL)))
+    code.resolve()
+    addr, program = code.encode()[0]
 
     d = cpm80.StringDisplay()
     m = cpm80.I8080CPMMachine(console_reader=cpm80.StringKeyboard(),
                               console_writer=d)
-    m.set_memory_block(0x100, PROGRAM)
-    m.pc = 0x100
+    m.set_memory_block(addr, program)
+    m.pc = addr
     m.run()
 
     assert d.string.startswith('A')
