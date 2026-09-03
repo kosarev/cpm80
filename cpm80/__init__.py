@@ -1,3 +1,4 @@
+import collections.abc
 import importlib.resources
 import pathlib
 import sys
@@ -15,9 +16,11 @@ class Error(BaseException):
 
 
 class DiskFormat:
-    def __init__(self, *, sectors_per_track=40, num_reserved_tracks=2,
-                 block_size=2048, num_blocks=395, num_dir_entries=128):
-        def _div_ceil(a, b):
+    def __init__(self, *, sectors_per_track: int = 40,
+                 num_reserved_tracks: int = 2, block_size: int = 2048,
+                 num_blocks: int = 395,
+                 num_dir_entries: int = 128) -> None:
+        def _div_ceil(a: int, b: int) -> int:
             return -(a // -b)
 
         if block_size not in (1024, 2048, 4096, 8192, 16384):
@@ -74,12 +77,12 @@ class DiskFormat:
         self.unreserved_size = self.num_blocks * self.block_size
         self.disk_size = self.reserved_size + self.unreserved_size
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         params = ', '.join(f'{p}={v}' for p, v in self.params.items())
-        return f'{__class__.__name__}({params})'
+        return f'{type(self).__name__}({params})'
 
     @staticmethod
-    def parse_spec(specs):
+    def parse_spec(specs: collections.abc.Iterable[str]) -> dict[str, int]:
         params = DiskFormat().params
         for s in specs:
             p, eq, v = s.partition('=')
@@ -89,15 +92,15 @@ class DiskFormat:
                 raise Error(f'unknown parameter {p!r}')
 
             try:
-                v = int(v)
+                value = int(v)
             except ValueError as e:
                 raise Error(f'invalid value for parameter {p!r}: {e}')
 
-            params[p] = v
+            params[p] = value
 
         return params
 
-    def translate_sector(self, logical_sector):
+    def translate_sector(self, logical_sector: int) -> int:
         assert self.skew_factor == 0
         physical_sector = logical_sector
         return physical_sector
@@ -116,7 +119,9 @@ DISK_FORMATS = {
 class DiskImage:
     __SIGNATURE = 'cpm80 disk image <https://pypi.org/project/cpm80>'
 
-    def __init__(self, format, *, data=None, store_format=True):
+    def __init__(self, format: DiskFormat, *,
+                 data: bytes | bytearray | None = None,
+                 store_format: bool = True) -> None:
         self.format = format
 
         size = format.disk_size
@@ -136,9 +141,9 @@ class DiskImage:
             self.data[:len(header)] = header
 
     @staticmethod
-    def parse_header(data):
+    def parse_header(data: bytes) -> dict[str, int]:
         header = data.partition(b'\n\n')[0].decode('ascii').splitlines()
-        if not header or not header.pop(0).startswith(__class__.__SIGNATURE):
+        if not header or not header.pop(0).startswith(DiskImage.__SIGNATURE):
             raise Error('no disk signature')
 
         if not header:
@@ -150,17 +155,17 @@ class DiskImage:
 
         return format
 
-    def get_sector(self, sector, track):
+    def get_sector(self, sector: int, track: int) -> memoryview:
         sector_index = sector + track * self.format.spt_sectors_per_track
         offset = sector_index * SECTOR_SIZE
         return memoryview(self.data)[offset:offset + SECTOR_SIZE]
 
-    def translate_sector(self, logical_sector):
+    def translate_sector(self, logical_sector: int) -> int:
         return self.format.translate_sector(logical_sector)
 
 
 class DiskDrive:
-    def __init__(self, image=None):
+    def __init__(self, image: DiskImage | None = None) -> None:
         if image is None:
             image = DiskImage(DiskFormat())
 
@@ -169,27 +174,27 @@ class DiskDrive:
         self.current_track = 0
 
     @property
-    def format(self):
+    def format(self) -> DiskFormat:
         return self.image.format
 
-    def translate_sector(self, logical_sector):
+    def translate_sector(self, logical_sector: int) -> int:
         return self.image.translate_sector(logical_sector)
 
-    def read_sector(self):
+    def read_sector(self) -> bytes:
         sector = self.image.get_sector(self.current_sector, self.current_track)
         return bytes(sector)
 
-    def write_sector(self, data):
+    def write_sector(self, data: bytes | memoryview) -> None:
         assert len(data) == SECTOR_SIZE
         sector = self.image.get_sector(self.current_sector, self.current_track)
         sector[:] = data
 
 
 class KeyboardDevice:
-    def __init__(self):
+    def __init__(self) -> None:
         self.__ctrl_c_count = 0
 
-    def input(self):
+    def input(self) -> int | None:
         # Borrowed from:
         # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
         fd = sys.stdin.fileno()
@@ -216,11 +221,11 @@ class KeyboardDevice:
 
 
 class StringKeyboard:
-    def __init__(self, *commands):
+    def __init__(self, *commands: str) -> None:
         self.__input = '\n'.join(commands) + '\n'
         self.__i = 0
 
-    def input(self):
+    def input(self) -> int | None:
         if self.__i >= len(self.__input):
             return None
 
@@ -230,20 +235,20 @@ class StringKeyboard:
 
 
 class DisplayDevice:
-    def output(self, c):
+    def output(self, c: int) -> None:
         sys.stdout.write(chr(c))
         sys.stdout.flush()
 
 
 class StringDisplay:
-    def __init__(self):
-        self.__output = []
+    def __init__(self) -> None:
+        self.__output: list[int] = []
 
-    def output(self, c):
+    def output(self, c: int) -> None:
         self.__output.append(c)
 
     @property
-    def string(self):
+    def string(self) -> str:
         return ''.join(chr(c) for c in self.__output)
 
 
