@@ -38,7 +38,8 @@ def test_bios_vectors_via_reboot_jump() -> None:
     m.pc = addr
     m.run()
 
-    assert d.string.startswith('A')
+    SIGNON = '44k CP/M vers 2.2\r\n'
+    assert d.string.startswith(SIGNON + 'A')
     assert 'A>' in d.string
 
 

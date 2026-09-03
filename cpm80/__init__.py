@@ -318,8 +318,10 @@ class HostDrive(DiskDrive):
 
         # Build through a plain drive on the new image, so the
         # host drive's own reactions to writes and boots do not
-        # trigger while mounting.
-        m = I8080CPMMachine(drives=[DiskDrive(image)])
+        # trigger while mounting; the boot signon goes to a string
+        # nobody reads.
+        m = I8080CPMMachine(drives=[DiskDrive(image)],
+                            console_writer=StringDisplay())
         for path in sorted(self.directory.iterdir()):
             if not path.is_file() or path.name.startswith('.'):
                 continue
@@ -696,6 +698,12 @@ class CPMMachineMixin(_MachineBase):
         CURRENT_DISK = 0
         self.set_memory_block(self.__CURRENT_DISK_ADDR,
                               CURRENT_DISK.to_bytes(1, 'little'))
+
+        # The BIOS signon: a cold boot announces the system.  CCP
+        # at 0x9400 is the 44k memory configuration.
+        MEMORY_SIZE_K = 44
+        for c in f'{MEMORY_SIZE_K}k CP/M vers 2.2\r\n':
+            self.__console_writer.output(ord(c))
 
         self.on_wboot()
 

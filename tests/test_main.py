@@ -18,7 +18,8 @@ def test_commands(capsys: pytest.CaptureFixture[str],
                   tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
     cpm80.main(['--temp-disk', 'dir'])
-    assert capsys.readouterr().out == ('\r\nA>dir\r\r\n'
+    SIGNON = '44k CP/M vers 2.2\r\n'
+    assert capsys.readouterr().out == (SIGNON + '\r\nA>dir\r\r\n'
                                        'A: PIP      COM\r\nA>')
 
 

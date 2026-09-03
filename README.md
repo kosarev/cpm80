@@ -21,8 +21,9 @@ $ pip install cpm80
 
 ```
 $ cpm80
+44k CP/M vers 2.2
 
->save 1 dump.dat
+A>save 1 dump.dat
 A>dir
 A: DUMP     DAT
 A>exit
@@ -41,6 +42,7 @@ disks come with PIP, so files just copy.
 $ ls
 hello.txt
 $ cpm80
+44k CP/M vers 2.2
 
 A>dir b:
 B: HELLO    TXT
@@ -84,6 +86,8 @@ m.run()
 
 Output:
 ```
+44k CP/M vers 2.2
+
 A>dir
 NO FILE
 A>save 1 a.dat

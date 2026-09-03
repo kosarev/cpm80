@@ -29,7 +29,8 @@ def test_filename_validation() -> None:
 def test_c_writestr(capsys: pytest.CaptureFixture[str]) -> None:
     m = cpm80.I8080CPMMachine()
     m.write_str('abc')
-    assert capsys.readouterr().out == 'abc'
+    SIGNON = '44k CP/M vers 2.2\r\n'
+    assert capsys.readouterr().out == SIGNON + 'abc'
 
 
 def test_s_bdosver() -> None:
