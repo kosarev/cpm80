@@ -51,7 +51,7 @@ packages = ['cpm80']
 [tool.setuptools.package-data]
 # py.typed is the PEP 561 marker telling type checkers the package
 # carries type information.
-cpm80 = ['*.bin', 'py.typed']
+cpm80 = ['*.bin', 'pip.com', 'py.typed']
 
 [tool.ruff]
 # Anchors the ruff project root, so the cpm80 package is recognised as

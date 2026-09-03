@@ -24,6 +24,11 @@ else:
 SECTOR_SIZE = 128
 
 
+def _load_data(filename: str) -> bytes:
+    files = importlib.resources.files('cpm80')
+    return files.joinpath(filename).read_bytes()
+
+
 class Error(BaseException):
     pass
 
@@ -665,12 +670,8 @@ class CPMMachineMixin(_MachineBase):
 
         self.__disk_header_tables = tuple(tables)
 
-    @staticmethod
-    def __load_data(path: str) -> bytes:
-        return importlib.resources.files('cpm80').joinpath(path).read_bytes()
-
     def on_boot(self) -> None:
-        self.set_memory_block(self.__BDOS_BASE, self.__load_data('bdos.bin'))
+        self.set_memory_block(self.__BDOS_BASE, _load_data('bdos.bin'))
 
         # The word at 0x0001 is how programs locate the BIOS vector
         # table, so it must point at WBOOT, the second vector.
@@ -702,7 +703,7 @@ class CPMMachineMixin(_MachineBase):
         for drive in self.__drives:
             drive.on_warm_boot()
 
-        self.set_memory_block(self.__CCP_BASE, self.__load_data('ccp.bin'))
+        self.set_memory_block(self.__CCP_BASE, _load_data('ccp.bin'))
 
         DEFAULT_DMA = 0x80
         self.__dma = DEFAULT_DMA
@@ -1120,6 +1121,14 @@ def main(commands: list[str] | None = None) -> None:
 
         m = I8080CPMMachine(drives=[drive, host_drive],
                             console_reader=console_reader)
+
+        # Fresh disks get PIP, so files can be copied between
+        # drives out of the box.
+        if disk_data is None:
+            m.make_file('pip.com')
+            m.write_file(_load_data('pip.com'))
+            m.close_file()
+
         try:
             m.run()
         finally:

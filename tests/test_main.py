@@ -18,7 +18,20 @@ def test_commands(capsys: pytest.CaptureFixture[str],
                   tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
     cpm80.main(['--temp-disk', 'dir'])
-    assert capsys.readouterr().out == '\r\nA>dir\r\r\nNO FILE\r\nA>'
+    assert capsys.readouterr().out == ('\r\nA>dir\r\r\n'
+                                       'A: PIP      COM\r\nA>')
+
+
+def test_copying_with_pip(capsys: pytest.CaptureFixture[str],
+                          monkeypatch: pytest.MonkeyPatch,
+                          tmp_path: pathlib.Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'hello.txt').write_bytes(b'hello from the host\x1a')
+
+    cpm80.main(['--temp-disk', 'pip a:=b:hello.txt',
+                'type hello.txt'])
+
+    assert 'hello from the host' in capsys.readouterr().out
 
 
 def test_current_directory_mounts_as_b(
