@@ -264,11 +264,18 @@ class HostDrive(DiskDrive):
                              '0123456789#$%&()-_@!')
 
     def __init__(self, directory: str | pathlib.Path = '.', *,
-                 format: DiskFormat | None = None) -> None:
+                 format: DiskFormat | None = None,
+                 exclude: collections.abc.Iterable[
+                     str | pathlib.Path] = ()) -> None:
         if format is None:
             format = DISK_FORMATS['host']
 
         self.directory = pathlib.Path(directory)
+
+        # Host files not to mirror, given as paths -- the emulator's
+        # own disk image when it happens to sit in this directory.
+        self.__excluded = {pathlib.Path(p).resolve() for p in exclude}
+
         super().__init__(DiskImage(format))
         self.remount()
 
@@ -312,6 +319,9 @@ class HostDrive(DiskDrive):
 
         for path in sorted(self.directory.iterdir()):
             if not path.is_file() or path.name.startswith('.'):
+                continue
+
+            if path.resolve() in self.__excluded:
                 continue
 
             name = self.__make_cpm_name(path.name)
@@ -1152,8 +1162,10 @@ def main(commands: list[str] | None = None) -> None:
         image = DiskImage(DiskFormat(**params), data=disk_data)
         drive = DiskDrive(image)
 
-        # The current directory mounts as drive B:.
-        host_drive = HostDrive()
+        # The current directory mounts as drive B:, except for the
+        # persistent disk image when the emulator runs in its own
+        # data directory.
+        host_drive = HostDrive(exclude=[disk_path])
         for warning in host_drive.warnings:
             print(f'cpm80: {warning}', file=sys.stderr)
 

@@ -50,6 +50,25 @@ def test_current_directory_mounts_as_b(
     assert 'not a cpm name' in err
 
 
+def test_disk_image_not_mirrored_from_data_dir(
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path) -> None:
+    # Run from the data directory itself, so the persistent disk
+    # image sits in the mirrored directory.
+    monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path))
+    data_dir = tmp_path / 'cpm80'
+    data_dir.mkdir()
+    monkeypatch.chdir(data_dir)
+
+    cpm80.main(['dir b:'])          # Creates disk.img.
+    cpm80.main(['dir b:'])          # Would mirror it if not excluded.
+
+    out, err = capsys.readouterr()
+    assert 'no space left' not in err
+    assert 'B: DISK     IMG' not in out
+
+
 def test_files_saved_on_b_land_on_the_host(
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,

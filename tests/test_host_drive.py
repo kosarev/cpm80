@@ -101,6 +101,17 @@ def test_missing_directory(tmp_path: pathlib.Path) -> None:
         cpm80.HostDrive(tmp_path / 'nonexistent')
 
 
+def test_excluded_files_are_not_mounted(
+        tmp_path: pathlib.Path) -> None:
+    (tmp_path / 'keep.txt').write_bytes(b'k')
+    (tmp_path / 'skip.img').write_bytes(b's')
+
+    drive = cpm80.HostDrive(tmp_path, exclude=[tmp_path / 'skip.img'])
+
+    assert list(drive.host_paths) == ['KEEP.TXT']
+    assert drive.warnings == []
+
+
 def test_flush_new_and_updated_files(tmp_path: pathlib.Path) -> None:
     (tmp_path / 'old.txt').write_bytes(b'old')
     drive = cpm80.HostDrive(tmp_path)
