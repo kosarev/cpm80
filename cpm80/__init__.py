@@ -912,13 +912,6 @@ class CPMMachineMixin(_MachineBase):
         self.__disk_header_tables = tuple(tables)
 
     def on_boot(self) -> None:
-        self.set_memory_block(self.__BDOS_BASE, _load_data('bdos.bin'))
-
-        # The word at 0x0001 is how programs locate the BIOS vector
-        # table, so it must point at WBOOT, the second vector.
-        WBOOT = self.__BIOS_BASE + 3
-        self.set_memory_block(self.__REBOOT, z80.JP(WBOOT).encode())
-
         for addr in self.__bios_vectors:
             self.set_memory_block(addr, z80.RET().encode())
 
@@ -930,9 +923,6 @@ class CPMMachineMixin(_MachineBase):
         self.__set_up_disk_tables()
 
         self.sp = 0x100
-
-        self.set_memory_block(self.BDOS_ENTRY,
-                              z80.JP(self.__BDOS_CODE_ENTRY).encode())
 
         CURRENT_DISK = 0
         self.set_memory_block(self.__CURRENT_DISK_ADDR,
@@ -947,6 +937,22 @@ class CPMMachineMixin(_MachineBase):
         self.on_wboot()
 
     def on_wboot(self) -> None:
+        # A warm boot restores the parts of the system a transient
+        # program may have overwritten -- the CCP and BDOS, and the
+        # page-zero jumps that reach them.  A real CP/M reloads CCP
+        # and BDOS from disk here for exactly this reason; a program
+        # built for a machine with more memory can otherwise write
+        # over ours.
+        self.set_memory_block(self.__CCP_BASE, _load_data('ccp.bin'))
+        self.set_memory_block(self.__BDOS_BASE, _load_data('bdos.bin'))
+
+        # 0x0000 jumps to WBOOT (the address at 0x0001 is also how a
+        # program locates the BIOS table); 0x0005 jumps to the BDOS.
+        WBOOT = self.__BIOS_BASE + 3
+        self.set_memory_block(self.__REBOOT, z80.JP(WBOOT).encode())
+        self.set_memory_block(self.BDOS_ENTRY,
+                              z80.JP(self.__BDOS_CODE_ENTRY).encode())
+
         for drive in self.__drives:
             drive.on_warm_boot()
 
@@ -955,8 +961,6 @@ class CPMMachineMixin(_MachineBase):
         show_cursor = getattr(self.__console_writer, 'show_cursor', None)
         if show_cursor is not None:
             show_cursor()
-
-        self.set_memory_block(self.__CCP_BASE, _load_data('ccp.bin'))
 
         DEFAULT_DMA = 0x80
         self.__dma = DEFAULT_DMA

@@ -9,6 +9,7 @@
 import pathlib
 
 import pytest
+import z80
 
 import cpm80
 
@@ -89,6 +90,41 @@ def test_r1715_machine_uses_the_r1715_terminal(
     # The R1715 terminal turns the address into ANSI positioning and
     # the KOI-7 bytes into Cyrillic.
     assert '\x1b[3;6HДИ' in capsys.readouterr().out
+
+
+def test_warm_boot_restores_bdos(capsys: pytest.CaptureFixture[str],
+                                 monkeypatch: pytest.MonkeyPatch,
+                                 tmp_path: pathlib.Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    # A program that fills the BDOS (from 0xd800 up to the BIOS) with
+    # RST 0 bytes and warm-boots, the way a program built for more
+    # memory tramples the system.  The next command needs the BDOS,
+    # so it hangs unless the warm boot reloaded it.
+    BDOS, BIOS, TPA = 0xd800, 0xe600, 0x100
+    code = z80.Code()
+    code.start_block(TPA)
+    loop = code.get_symbol('loop')
+    code.add(z80.LD(z80.HL, BDOS),
+             z80.LD(z80.BC, BIOS - BDOS),
+             z80.LabelDef(loop),
+             z80.LD(z80.At(z80.HL), 0xc7),      # store an RST 0
+             z80.INC(z80.HL),
+             z80.DEC(z80.BC),
+             z80.LD(z80.A, z80.B),
+             z80.OR(z80.C),
+             z80.JP(z80.NZ, loop),
+             z80.JP(0))                         # warm boot
+    code.resolve()
+    prog = b''.join(block for _, block in code.encode())
+
+    fs = cpm80.FileSystem(cpm80.DiskImage(cpm80.DiskFormat()))
+    fs.write('wb.com', prog)
+    image = tmp_path / 'disk.cpm'
+    image.write_bytes(bytes(fs.image.data))
+
+    cpm80.main(['--no-automount', '--mount', str(image), 'wb', 'dir'])
+    assert 'A: WB' in capsys.readouterr().out       # dir listed the file
 
 
 def test_mount_a_directory(capsys: pytest.CaptureFixture[str],
