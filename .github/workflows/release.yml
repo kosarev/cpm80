@@ -85,16 +85,31 @@ jobs:
     environment: pypi
 
     steps:
+    - uses: actions/checkout@v4.2.2
+      with:
+        fetch-depth: 0        # need the annotated tag and its message
+
     - name: Download sdist and wheel
       uses: actions/download-artifact@v4
       with:
         name: dist
         path: dist/
 
+    # The release notes are the message of the tag being released.
+    - name: Take the release notes from the tag message
+      id: notes
+      run: |
+        {
+          echo 'body<<RELEASE_NOTES_EOF'
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME"
+          echo RELEASE_NOTES_EOF
+        } >> "$GITHUB_OUTPUT"
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: dist/*
+        body: ${{ steps.notes.outputs.body }}
 
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
