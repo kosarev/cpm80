@@ -151,22 +151,26 @@ DISK_FORMATS = {
 DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 
-# A machine cpm80 can present.  disk_format fixes the format of its
-# home disk and of images mounted on it; None means the cpm80-native
-# format, which each image carries in its own header.  The home disk
-# is named after the machine (cpm80.img, r1715.img).  CPU, terminal
-# and character set will join here.
+# A machine cpm80 can present.  disk_format names (in DISK_FORMATS)
+# the format of its home disk and of foreign images mounted on it; a
+# cpm80-written image overrides it from its own header.  The home
+# disk is named after the machine (cpm80.img, r1715.img).  CPU,
+# terminal and character set will join here.
 class MachineType:
-    def __init__(self, *, disk_format: DiskFormat | None = None) -> None:
-        self.disk_format = disk_format
+    def __init__(self, *, disk_format: str = 'default') -> None:
+        self.__disk_format = disk_format
+
+    @property
+    def disk_format(self) -> DiskFormat:
+        return DISK_FORMATS[self.__disk_format]
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(disk_format={self.disk_format!r})'
+        return f'{type(self).__name__}(disk_format={self.__disk_format!r})'
 
 
 MACHINES = {
     'cpm80': MachineType(),
-    'r1715': MachineType(disk_format=DISK_FORMATS['r1715']),
+    'r1715': MachineType(disk_format='r1715'),
 }
 
 
@@ -200,8 +204,13 @@ class DiskImage:
             self.data[:len(header)] = header
 
     @staticmethod
+    def has_header(data: bytes) -> bool:
+        # True for an image cpm80 wrote, which carries its own format.
+        return data.startswith(DiskImage.__SIGNATURE.encode('ascii'))
+
+    @staticmethod
     def parse_header(data: bytes) -> dict[str, int]:
-        if not data.startswith(DiskImage.__SIGNATURE.encode('ascii')):
+        if not DiskImage.has_header(data):
             raise Error('no disk signature')
 
         try:
@@ -1373,9 +1382,14 @@ def main(commands: list[str] | None = None) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
 
     disk_path = data_dir / f'{machine}.img'
-    # The format for the home disk and for images mounted on this
-    # machine; None means the cpm80-native format from each header.
-    image_format = MACHINES[machine].disk_format
+    machine_format = MACHINES[machine].disk_format
+
+    # A cpm80-written image carries its own format; a foreign one
+    # takes the machine's.
+    def format_of(data: bytes) -> DiskFormat:
+        if DiskImage.has_header(data):
+            return DiskFormat(**DiskImage.parse_header(data))
+        return machine_format
 
     try:
         drives: list[DiskDrive] = []
@@ -1390,10 +1404,7 @@ def main(commands: list[str] | None = None) -> None:
                 disk_data = disk_path.read_bytes()
             except FileNotFoundError:
                 pass
-            if disk_data is not None:
-                fmt = DiskFormat(**DiskImage.parse_header(disk_data))
-            else:
-                fmt = image_format or DiskFormat()
+            fmt = machine_format if disk_data is None else format_of(disk_data)
             home = DiskImage(fmt, data=disk_data)
             drives.append(DiskDrive(home))
             persist_image = home
@@ -1410,17 +1421,15 @@ def main(commands: list[str] | None = None) -> None:
                 drives.append(host)
             elif target.is_file():
                 data = target.read_bytes()
-                fmt = (image_format if image_format is not None
-                       else DiskFormat(**DiskImage.parse_header(data)))
                 drives.append(DiskDrive(
-                    DiskImage(fmt, data=data, store_format=False)))
+                    DiskImage(format_of(data), data=data, store_format=False)))
             else:
                 sys.exit(f'cpm80: no such directory or image: {target}')
 
         # With no home disk and nothing mounted, A: is a fresh disk
         # to fill; give it PIP too.
         if not drives:
-            drives.append(DiskDrive(DiskImage(image_format or DiskFormat())))
+            drives.append(DiskDrive(DiskImage(machine_format)))
             seed_pip = True
 
         for host in host_drives:
