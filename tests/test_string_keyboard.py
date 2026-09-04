@@ -21,3 +21,12 @@ def test_basic() -> None:
         input += chr(c)
 
     assert input == 'user 0\ndir\ntype a.txt\n'
+
+
+def test_never_ready() -> None:
+    # Commands are delivered on demand, not typed ahead, so the
+    # keyboard never reports a key waiting.
+    k = cpm80.StringKeyboard('dir')
+    assert k.ready() is False
+    k.input()
+    assert k.ready() is False

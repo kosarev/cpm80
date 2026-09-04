@@ -43,6 +43,29 @@ def test_bios_vectors_via_reboot_jump() -> None:
     assert 'A>' in d.string
 
 
+def test_console_status() -> None:
+    # BDOS console status (function 11) reports through BIOS CONST:
+    # 1 when a character is ready, 0 otherwise (BDOS normalises the
+    # 0xff CONST returns).
+    class Reader:
+        def __init__(self, ready: bool) -> None:
+            self.__ready = ready
+
+        def input(self) -> int | None:
+            return ord('x')
+
+        def ready(self) -> bool:
+            return self.__ready
+
+    m = cpm80.I8080CPMMachine(console_reader=Reader(ready=True))
+    m.bdos_call(m.C_STAT)
+    assert m.a == 1
+
+    m = cpm80.I8080CPMMachine(console_reader=Reader(ready=False))
+    m.bdos_call(m.C_STAT)
+    assert m.a == 0
+
+
 def test_default_dma() -> None:
     drive = cpm80.DiskDrive()
     marker = bytes(range(128))

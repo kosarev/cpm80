@@ -18,6 +18,7 @@ import z80
 if sys.platform == 'win32':
     import msvcrt
 else:
+    import select
     import termios
     import tty
 
@@ -417,6 +418,22 @@ class KeyboardDevice:
 
         return ch
 
+    def ready(self) -> bool:
+        # Only an interactive terminal has keys waiting; a
+        # redirected or captured stdin never does, and polling it
+        # would misreport its end as a waiting character.
+        try:
+            if not sys.stdin.isatty():
+                return False
+        except (OSError, ValueError):
+            return False
+
+        if sys.platform == 'win32':
+            return msvcrt.kbhit()
+        else:
+            readable, _, _ = select.select([sys.stdin], [], [], 0)
+            return bool(readable)
+
 
 class StringKeyboard:
     def __init__(self, *commands: str) -> None:
@@ -430,6 +447,13 @@ class StringKeyboard:
         c = self.__input[self.__i]
         self.__i += 1
         return ord(c)
+
+    # Never reports a key waiting: the commands are delivered one at
+    # a time only when the machine reads, never typed ahead.  A
+    # reader that reported ready while commands remain would have
+    # them consumed by CP/M's console-status polling during output.
+    def ready(self) -> bool:
+        return False
 
 
 class DisplayDevice:
@@ -450,13 +474,20 @@ class StringDisplay:
         return ''.join(chr(c) for c in self.__output)
 
 
-# Any object with an input() method works as a console reader, and any
-# object with an output() method as a console writer.
+# Any object with input() and ready() methods works as a console
+# reader.  input() returns the next character code, or None to stop
+# the machine; ready() reports console status -- whether a key is
+# waiting, which CP/M polls during output as well as input.
 class ConsoleReader(typing.Protocol):
     def input(self) -> int | None:
         ...
 
+    def ready(self) -> bool:
+        ...
 
+
+# Any object with an output() method works as a console writer.
+# output() is given the next character code to display.
 class ConsoleWriter(typing.Protocol):
     def output(self, c: int) -> None:
         ...
@@ -478,6 +509,7 @@ class CPMMachineMixin(_MachineBase):
 
     BDOS_ENTRY = 0x0005
     C_WRITESTR = 9
+    C_STAT = 0xb
     S_BDOSVER = 0xc
     F_OPEN = 0xf
     F_CLOSE = 0x10
@@ -672,8 +704,9 @@ class CPMMachineMixin(_MachineBase):
         self.pc = self.__CCP_BASE
 
     def on_const(self) -> None:
-        # TODO
-        self.a = 0
+        # The BIOS reports console status as a whole byte: all ones
+        # for ready, all zeros for not.
+        self.a = 0xff if self.__console_reader.ready() else 0
 
     def on_conin(self) -> None:
         c = self.__console_reader.input()
