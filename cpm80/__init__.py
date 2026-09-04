@@ -600,15 +600,21 @@ class ADM3ATerminal:
 
 # The Robotron 1715 terminal.  Its cursor addressing is ESC followed
 # by a row byte and a column byte, each biased by 0x80.  Form feed
-# clears the screen.  This covers what the R1715 games observed emit;
-# their Cyrillic text is a separate character-set concern.
+# clears the screen.  Its games draw the screen as a plain run of
+# characters and rely on the terminal to wrap to the next line at the
+# right edge, so this tracks the cursor column and wraps at the
+# screen width.  This covers what the R1715 games observed emit; their
+# Cyrillic text is handled by the character set.
 class R1715Terminal:
+    __WIDTH = 80
+
     # Waiting for the rest of a sequence: 0 none, 1 want the row byte,
     # 2 want the column byte.
     def __init__(self, charset: Charset | None = None) -> None:
         self.__charset = charset if charset is not None else Charset({})
         self.__pending = 0
         self.__row = 0
+        self.__col = 0
         self.draws_screen = False
 
     def translate(self, c: int) -> str:
@@ -625,6 +631,7 @@ class R1715Terminal:
             row = max(0, self.__row - 0x80) + 1
             col = max(0, c - 0x80) + 1
             self.__pending = 0
+            self.__col = col - 1
             self.draws_screen = True
             return f'\x1b[{row};{col}H'
 
@@ -632,9 +639,23 @@ class R1715Terminal:
             self.__pending = 1
             return ''
         if c == 0x0c:               # form feed clears the screen
+            self.__col = 0
             self.draws_screen = True
             return '\x1b[2J\x1b[H'
-        return self.__charset.translate(c)
+        if c == 0x0d:               # carriage return
+            self.__col = 0
+            return '\r'
+        if c < 0x20:                # other controls do not move the column
+            return self.__charset.translate(c)
+
+        # A printable character.  Wrap to the next line before it if
+        # the row is full.
+        prefix = ''
+        if self.__col >= self.__WIDTH:
+            prefix = '\r\n'
+            self.__col = 0
+        self.__col += 1
+        return prefix + self.__charset.translate(c)
 
 
 # The terminals a machine can select (see MACHINES).  Each is built

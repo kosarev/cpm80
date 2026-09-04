@@ -81,3 +81,18 @@ def test_terminal_applies_its_charset_to_text() -> None:
 def test_default_charset_is_ascii() -> None:
     out, _ = feed(cpm80.ADM3ATerminal(), b'abz')
     assert out == 'abz'
+
+
+def test_r1715_wraps_at_the_screen_width() -> None:
+    # A run longer than the 80-column screen wraps once, after the
+    # 80th character.
+    out, _ = feed(cpm80.R1715Terminal(), b'A' * 85)
+    assert out == 'A' * 80 + '\r\n' + 'A' * 5
+
+
+def test_r1715_wrap_counts_from_the_cursor_address() -> None:
+    # Addressing the cursor to column 78 (0-based) leaves room for two
+    # more characters before the wrap.
+    out, _ = feed(cpm80.R1715Terminal(),
+                  b'\x1b' + bytes([0x80, 0x80 + 78]) + b'ABC')
+    assert out == '\x1b[1;79HAB\r\nC'
