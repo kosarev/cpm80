@@ -498,12 +498,73 @@ class StringKeyboard:
 # modern terminal shows them unchanged; the ADM-3A cursor controls
 # and its ESC= cursor addressing are translated to the ANSI
 # sequences modern terminals understand.
-class DisplayDevice:
+# Translates the control codes a CP/M program emits for its terminal
+# into ANSI for the host terminal.  A machine selects which terminal
+# it emulates.  translate() returns the ANSI text for one output
+# byte.  After a byte that moves or clears the cursor it sets
+# draws_screen, so the display can hide the blinking hardware cursor
+# while a program paints the screen.
+class Terminal(typing.Protocol):
+    draws_screen: bool
+
+    def translate(self, c: int) -> str:
+        ...
+
+
+# The ADM-3A, the terminal the bundled CP/M expects.
+class ADM3ATerminal:
     # Waiting for the rest of an escape sequence: 0 none, 1 seen
     # ESC, 2 want the row byte, 3 want the column byte.
     def __init__(self) -> None:
         self.__pending = 0
         self.__row = 0
+        self.draws_screen = False
+
+    def translate(self, c: int) -> str:
+        self.draws_screen = False
+
+        if self.__pending == 1:
+            if c == ord('='):       # ESC= loads the cursor position
+                self.__pending = 2
+                return ''
+            # some other escape; pass it on
+            self.__pending = 0
+            return '\x1b' + chr(c)
+
+        if self.__pending == 2:
+            self.__row = c
+            self.__pending = 3
+            return ''
+
+        if self.__pending == 3:
+            # The row and column are biased by a space; ANSI counts
+            # from one.
+            row = max(0, self.__row - 0x20) + 1
+            col = max(0, c - 0x20) + 1
+            self.__pending = 0
+            self.draws_screen = True
+            return f'\x1b[{row};{col}H'
+
+        SEQUENCES = {
+            0x0b: '\x1b[A',         # cursor up
+            0x0c: '\x1b[C',         # cursor right
+            0x1a: '\x1b[2J\x1b[H',  # clear screen and home
+            0x1e: '\x1b[H',         # home
+        }
+        if c == 0x1b:               # ESC
+            self.__pending = 1
+            return ''
+        if c in SEQUENCES:
+            self.draws_screen = True
+            return SEQUENCES[c]
+        return chr(c)
+
+
+# Writes a terminal's output to the host tty and manages the hardware
+# cursor.  The translation itself is the terminal's; this is the sink.
+class DisplayDevice:
+    def __init__(self, terminal: Terminal | None = None) -> None:
+        self.__terminal = terminal if terminal is not None else ADM3ATerminal()
         self.__cursor_hidden = False
 
     def __write(self, s: str) -> None:
@@ -525,42 +586,11 @@ class DisplayDevice:
             self.__cursor_hidden = False
 
     def output(self, c: int) -> None:
-        if self.__pending == 1:
-            if c == ord('='):       # ESC= loads the cursor position
-                self.__pending = 2
-            else:                   # some other escape; pass it on
-                self.__write('\x1b' + chr(c))
-                self.__pending = 0
-            return
-
-        if self.__pending == 2:
-            self.__row = c
-            self.__pending = 3
-            return
-
-        if self.__pending == 3:
-            # The row and column are biased by a space; ANSI counts
-            # from one.
-            row = max(0, self.__row - 0x20) + 1
-            col = max(0, c - 0x20) + 1
+        text = self.__terminal.translate(c)
+        if self.__terminal.draws_screen:
             self.__hide_cursor()
-            self.__write(f'\x1b[{row};{col}H')
-            self.__pending = 0
-            return
-
-        SEQUENCES = {
-            0x0b: '\x1b[A',         # cursor up
-            0x0c: '\x1b[C',         # cursor right
-            0x1a: '\x1b[2J\x1b[H',  # clear screen and home
-            0x1e: '\x1b[H',         # home
-        }
-        if c == 0x1b:               # ESC
-            self.__pending = 1
-        elif c in SEQUENCES:
-            self.__hide_cursor()
-            self.__write(SEQUENCES[c])
-        else:
-            self.__write(chr(c))
+        if text:
+            self.__write(text)
 
 
 class StringDisplay:
