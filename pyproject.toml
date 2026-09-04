@@ -58,5 +58,7 @@ cpm80 = ['*.bin', 'pip.com', 'py.typed']
 # first-party regardless of the directory ruff is invoked from.
 
 [tool.ruff.lint]
-# Reject needlessly quoted type annotations.
-extend-select = ['UP037']
+# Reject needlessly quoted type annotations, and check import
+# placement (E402) as pycodestyle does, so a deliberate late import
+# is marked with one noqa both tools honour.
+extend-select = ['E402', 'UP037']

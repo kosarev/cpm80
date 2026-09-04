@@ -7,6 +7,7 @@
 #   Published under the MIT license.
 
 import cpm80
+from cpm80._r1715 import R1715Terminal
 
 
 def feed(term: cpm80.Terminal, data: bytes) -> tuple[str, bool]:
@@ -47,19 +48,19 @@ def test_unknown_escape_passes_through() -> None:
 
 def test_r1715_cursor_addressing() -> None:
     # ESC <row+0x80> <col+0x80>; ANSI counts from one.
-    out, draws = feed(cpm80.R1715Terminal(), b'\x1b' + bytes([0x82, 0x85]))
+    out, draws = feed(R1715Terminal(), b'\x1b' + bytes([0x82, 0x85]))
     assert out == '\x1b[3;6H'
     assert draws
 
 
 def test_r1715_form_feed_clears() -> None:
-    out, draws = feed(cpm80.R1715Terminal(), b'\x0c')
+    out, draws = feed(R1715Terminal(), b'\x0c')
     assert out == '\x1b[2J\x1b[H'
     assert draws
 
 
 def test_r1715_text_passes_through() -> None:
-    out, draws = feed(cpm80.R1715Terminal(), b'Hi')
+    out, draws = feed(R1715Terminal(), b'Hi')
     assert out == 'Hi'
     assert not draws
 
@@ -74,7 +75,7 @@ def test_r1715_charset_maps_cyrillic_block_and_leaves_ascii() -> None:
 
 
 def test_terminal_applies_its_charset_to_text() -> None:
-    term = cpm80.R1715Terminal(cpm80.CHARSETS['r1715'])
+    term = R1715Terminal(cpm80.CHARSETS['r1715'])
     out, _ = feed(term, b'priwet')              # R1715 glyphs: ПРИВЕТ
     assert out == 'ПРИВЕТ'
 
@@ -87,13 +88,13 @@ def test_default_charset_is_ascii() -> None:
 def test_r1715_wraps_at_the_screen_width() -> None:
     # A run longer than the 80-column screen wraps once, after the
     # 80th character.
-    out, _ = feed(cpm80.R1715Terminal(), b'A' * 85)
+    out, _ = feed(R1715Terminal(), b'A' * 85)
     assert out == 'A' * 80 + '\r\n' + 'A' * 5
 
 
 def test_r1715_wrap_counts_from_the_cursor_address() -> None:
     # Addressing the cursor to column 78 (0-based) leaves room for two
     # more characters before the wrap.
-    out, _ = feed(cpm80.R1715Terminal(),
+    out, _ = feed(R1715Terminal(),
                   b'\x1b' + bytes([0x80, 0x80 + 78]) + b'ABC')
     assert out == '\x1b[1;79HAB\r\nC'
