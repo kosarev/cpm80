@@ -153,32 +153,35 @@ DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 # A machine cpm80 can present.  disk_format names (in DISK_FORMATS)
 # the format of its home disk and of foreign images mounted on it; a
-# cpm80-written image overrides it from its own header.  terminal
-# names (in TERMINALS) the terminal the machine's programs expect.
-# The home disk is named after the machine (cpm80.img, r1715.img).
-# CPU and character set will join here.
+# cpm80-written image overrides it from its own header.  terminal and
+# charset name (in TERMINALS and CHARSETS) the terminal the machine's
+# programs draw on and the character set they use.  The home disk is
+# named after the machine (cpm80.img, r1715.img).  A CPU will join
+# here.
 class MachineType:
     def __init__(self, *, disk_format: str = 'default',
-                 terminal: str = 'adm3a') -> None:
+                 terminal: str = 'adm3a', charset: str = 'ascii') -> None:
         self.__disk_format = disk_format
         self.__terminal = terminal
+        self.__charset = charset
 
     @property
     def disk_format(self) -> DiskFormat:
         return DISK_FORMATS[self.__disk_format]
 
-    @property
-    def terminal(self) -> 'collections.abc.Callable[[], Terminal]':
-        return TERMINALS[self.__terminal]
+    # A fresh terminal built with the machine's character set.
+    def make_terminal(self) -> 'Terminal':
+        return TERMINALS[self.__terminal](CHARSETS[self.__charset])
 
     def __repr__(self) -> str:
         return (f'{type(self).__name__}(disk_format={self.__disk_format!r}, '
-                f'terminal={self.__terminal!r})')
+                f'terminal={self.__terminal!r}, charset={self.__charset!r})')
 
 
 MACHINES = {
     'cpm80': MachineType(),
-    'r1715': MachineType(disk_format='r1715', terminal='r1715'),
+    'r1715': MachineType(disk_format='r1715', terminal='r1715',
+                         charset='koi7'),
 }
 
 
@@ -500,18 +503,43 @@ class StringKeyboard:
         return False
 
 
-# Presents the console as an ADM-3A terminal, the one screen-
-# oriented CP/M software was most often set up for.  Plain text and
-# the ordinary CR, LF, tab and bell pass straight through, so a
-# modern terminal shows them unchanged; the ADM-3A cursor controls
-# and its ESC= cursor addressing are translated to the ANSI
-# sequences modern terminals understand.
+# A character set maps a text byte to the character it shows.  The
+# default is ASCII, where a byte shows its own character.  KOI-7 puts
+# Cyrillic in the 0x60-0x7f range, as the Robotron 1715 software
+# expects.
+class Charset:
+    def __init__(self, mapping: dict[int, str]) -> None:
+        self.__mapping = mapping
+
+    def translate(self, c: int) -> str:
+        return self.__mapping.get(c, chr(c))
+
+
+# KOI-7 N2 (GOST 13052): the Cyrillic letters that share the byte
+# values of the lower-case Latin letters and the symbols after them.
+_KOI7_MAPPING = {
+    0x60: 'ю', 0x61: 'а', 0x62: 'б', 0x63: 'ц', 0x64: 'д', 0x65: 'е',
+    0x66: 'ф', 0x67: 'г', 0x68: 'х', 0x69: 'и', 0x6a: 'й', 0x6b: 'к',
+    0x6c: 'л', 0x6d: 'м', 0x6e: 'н', 0x6f: 'о', 0x70: 'п', 0x71: 'я',
+    0x72: 'р', 0x73: 'с', 0x74: 'т', 0x75: 'у', 0x76: 'ж', 0x77: 'в',
+    0x78: 'ь', 0x79: 'ы', 0x7a: 'з', 0x7b: 'ш', 0x7c: 'э', 0x7d: 'щ',
+    0x7e: 'ч', 0x7f: 'ъ',
+}
+
+# The character sets a machine can select (see MACHINES).
+CHARSETS = {
+    'ascii': Charset({}),
+    'koi7': Charset(_KOI7_MAPPING),
+}
+
+
 # Translates the control codes a CP/M program emits for its terminal
 # into ANSI for the host terminal.  A machine selects which terminal
-# it emulates.  translate() returns the ANSI text for one output
-# byte.  After a byte that moves or clears the cursor it sets
-# draws_screen, so the display can hide the blinking hardware cursor
-# while a program paints the screen.
+# it emulates.  translate() returns the display text for one output
+# byte: its character through the terminal's character set, or the
+# ANSI for a control code.  After a byte that moves or clears the
+# cursor it sets draws_screen, so the display can hide the blinking
+# hardware cursor while a program paints the screen.
 class Terminal(typing.Protocol):
     draws_screen: bool
 
@@ -523,7 +551,8 @@ class Terminal(typing.Protocol):
 class ADM3ATerminal:
     # Waiting for the rest of an escape sequence: 0 none, 1 seen
     # ESC, 2 want the row byte, 3 want the column byte.
-    def __init__(self) -> None:
+    def __init__(self, charset: Charset | None = None) -> None:
+        self.__charset = charset if charset is not None else Charset({})
         self.__pending = 0
         self.__row = 0
         self.draws_screen = False
@@ -565,7 +594,7 @@ class ADM3ATerminal:
         if c in SEQUENCES:
             self.draws_screen = True
             return SEQUENCES[c]
-        return chr(c)
+        return self.__charset.translate(c)
 
 
 # The Robotron 1715 terminal.  Its cursor addressing is ESC followed
@@ -575,7 +604,8 @@ class ADM3ATerminal:
 class R1715Terminal:
     # Waiting for the rest of a sequence: 0 none, 1 want the row byte,
     # 2 want the column byte.
-    def __init__(self) -> None:
+    def __init__(self, charset: Charset | None = None) -> None:
+        self.__charset = charset if charset is not None else Charset({})
         self.__pending = 0
         self.__row = 0
         self.draws_screen = False
@@ -603,11 +633,12 @@ class R1715Terminal:
         if c == 0x0c:               # form feed clears the screen
             self.draws_screen = True
             return '\x1b[2J\x1b[H'
-        return chr(c)
+        return self.__charset.translate(c)
 
 
-# The terminals a machine can select (see MACHINES).
-TERMINALS: dict[str, collections.abc.Callable[[], Terminal]] = {
+# The terminals a machine can select (see MACHINES).  Each is built
+# with the machine's character set.
+TERMINALS: dict[str, collections.abc.Callable[[Charset], Terminal]] = {
     'adm3a': ADM3ATerminal,
     'r1715': R1715Terminal,
 }
@@ -1460,7 +1491,7 @@ def main(commands: list[str] | None = None) -> None:
     if commands:
         console_reader = StringKeyboard(*commands)
 
-    console_writer = DisplayDevice(terminal=MACHINES[machine].terminal())
+    console_writer = DisplayDevice(terminal=MACHINES[machine].make_terminal())
 
     app_dirs = platformdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
