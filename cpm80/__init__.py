@@ -181,7 +181,7 @@ class MachineType:
 MACHINES = {
     'cpm80': MachineType(),
     'r1715': MachineType(disk_format='r1715', terminal='r1715',
-                         charset='koi7'),
+                         charset='r1715'),
 }
 
 
@@ -503,10 +503,10 @@ class StringKeyboard:
         return False
 
 
-# A character set maps a text byte to the character it shows.  The
-# default is ASCII, where a byte shows its own character.  KOI-7 puts
-# Cyrillic in the 0x60-0x7f range, as the Robotron 1715 software
-# expects.
+# A character set maps a byte to the glyph a machine shows for it.
+# The default is ASCII, where a byte shows its own character.  A
+# machine with its own character generator (the R1715) has its own
+# set.
 class Charset:
     def __init__(self, mapping: dict[int, str]) -> None:
         self.__mapping = mapping
@@ -515,22 +515,24 @@ class Charset:
         return self.__mapping.get(c, chr(c))
 
 
-# KOI-7 N2 (GOST 13052): the Cyrillic letters that share the byte
-# values of the lower-case Latin letters and the symbols after them.
-# The R1715 displays them as capitals.
-_KOI7_MAPPING = {
+# The Robotron 1715 glyphs that differ from ASCII: capital Cyrillic
+# where ASCII has the lower-case letters and the symbols after them
+# (the KOI-7 N2 layout, GOST 13052), and a solid block at 0xff that
+# its games fill the screen with.
+_R1715_GLYPHS = {
     0x60: 'Ю', 0x61: 'А', 0x62: 'Б', 0x63: 'Ц', 0x64: 'Д', 0x65: 'Е',
     0x66: 'Ф', 0x67: 'Г', 0x68: 'Х', 0x69: 'И', 0x6a: 'Й', 0x6b: 'К',
     0x6c: 'Л', 0x6d: 'М', 0x6e: 'Н', 0x6f: 'О', 0x70: 'П', 0x71: 'Я',
     0x72: 'Р', 0x73: 'С', 0x74: 'Т', 0x75: 'У', 0x76: 'Ж', 0x77: 'В',
     0x78: 'Ь', 0x79: 'Ы', 0x7a: 'З', 0x7b: 'Ш', 0x7c: 'Э', 0x7d: 'Щ',
     0x7e: 'Ч', 0x7f: 'Ъ',
+    0xff: '█',
 }
 
 # The character sets a machine can select (see MACHINES).
 CHARSETS = {
     'ascii': Charset({}),
-    'koi7': Charset(_KOI7_MAPPING),
+    'r1715': Charset(_R1715_GLYPHS),
 }
 
 

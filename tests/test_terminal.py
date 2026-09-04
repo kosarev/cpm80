@@ -64,17 +64,18 @@ def test_r1715_text_passes_through() -> None:
     assert not draws
 
 
-def test_koi7_maps_cyrillic_and_leaves_ascii() -> None:
-    koi7 = cpm80.CHARSETS['koi7']
-    assert koi7.translate(0x7b) == 'Ш'
-    assert koi7.translate(0x69) == 'И'
-    assert koi7.translate(ord('A')) == 'A'      # upper-case Latin
-    assert koi7.translate(ord(' ')) == ' '
+def test_r1715_charset_maps_cyrillic_block_and_leaves_ascii() -> None:
+    r1715 = cpm80.CHARSETS['r1715']
+    assert r1715.translate(0x7b) == 'Ш'
+    assert r1715.translate(0x69) == 'И'
+    assert r1715.translate(0xff) == '█'         # the solid cell
+    assert r1715.translate(ord('A')) == 'A'     # upper-case Latin
+    assert r1715.translate(ord(' ')) == ' '
 
 
 def test_terminal_applies_its_charset_to_text() -> None:
-    term = cpm80.R1715Terminal(cpm80.CHARSETS['koi7'])
-    out, _ = feed(term, b'priwet')              # KOI-7 for ПРИВЕТ
+    term = cpm80.R1715Terminal(cpm80.CHARSETS['r1715'])
+    out, _ = feed(term, b'priwet')              # R1715 glyphs: ПРИВЕТ
     assert out == 'ПРИВЕТ'
 
 
