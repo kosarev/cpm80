@@ -35,6 +35,21 @@ def test_copying_with_pip(capsys: pytest.CaptureFixture[str],
     assert 'hello from the host' in capsys.readouterr().out
 
 
+def test_speed_option(capsys: pytest.CaptureFixture[str],
+                      monkeypatch: pytest.MonkeyPatch,
+                      tmp_path: pathlib.Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    # A valid speed runs the usual commands.
+    cpm80.main(['--temp-disk', '--speed', '4', 'dir'])
+    assert 'PIP' in capsys.readouterr().out
+
+    with pytest.raises(SystemExit):
+        cpm80.main(['--speed', 'fast'])
+    with pytest.raises(SystemExit):
+        cpm80.main(['--speed'])
+
+
 def test_current_directory_mounts_as_b(
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,

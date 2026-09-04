@@ -10,6 +10,7 @@ import collections.abc
 import importlib.resources
 import pathlib
 import sys
+import time
 import typing
 
 import platformdirs
@@ -587,10 +588,24 @@ class CPMMachineMixin(_MachineBase):
 
     __BIOS_DISK_TABLES_HEAP_BASE = __BIOS_BASE + 0x80
 
+    # A frame is a short slice of emulated time paced against the
+    # wall clock; 50 a second is smooth and cheap.
+    __FRAMES_PER_SECOND = 50
+
     def __init__(self, *,
                  drives: collections.abc.Sequence[DiskDrive] | None = None,
                  console_reader: ConsoleReader | None = None,
-                 console_writer: ConsoleWriter | None = None) -> None:
+                 console_writer: ConsoleWriter | None = None,
+                 speed_mhz: float | None = None) -> None:
+        # None runs the machine as fast as it can; a speed paces it
+        # to that many million ticks a second.
+        if speed_mhz is None:
+            self.__frame_ticks = 0
+        else:
+            ticks_per_second = speed_mhz * 1_000_000
+            self.__frame_ticks = round(ticks_per_second /
+                                       self.__FRAMES_PER_SECOND)
+
         if drives is None:
             drives = DiskDrive(),
 
@@ -1136,19 +1151,42 @@ class CPMMachineMixin(_MachineBase):
     # the machine until the emulation is done, hence the deliberate
     # signature mismatch.
     def run(self) -> None:  # type: ignore[override]
+        if self.__frame_ticks == 0:
+            while not self.__done:
+                self.__run_step()
+            return
+
+        # Paced: run a frame's worth of ticks, then sleep off the
+        # real time left before the next frame is due.  ticks_to_stop
+        # counts down across the breakpoints hit within the frame.
+        frame_period = 1 / self.__FRAMES_PER_SECOND
+        due = time.monotonic()
         while not self.__done:
-            self.__run_step()
+            self.ticks_to_stop = self.__frame_ticks
+            while not self.__done and self.ticks_to_stop != 0:
+                self.__run_step()
+
+            due += frame_period
+            now = time.monotonic()
+            if now < due:
+                time.sleep(due - now)
+            elif now - due > frame_period:
+                # Fell behind -- for instance after waiting on input
+                # -- so give up catching the lost time up.
+                due = now
 
 
 class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
     def __init__(self, *,
                  drives: collections.abc.Sequence[DiskDrive] | None = None,
                  console_reader: ConsoleReader | None = None,
-                 console_writer: ConsoleWriter | None = None) -> None:
+                 console_writer: ConsoleWriter | None = None,
+                 speed_mhz: float | None = None) -> None:
         z80.I8080Machine.__init__(self)
         CPMMachineMixin.__init__(self, drives=drives,
                                  console_reader=console_reader,
-                                 console_writer=console_writer)
+                                 console_writer=console_writer,
+                                 speed_mhz=speed_mhz)
 
 
 # The files of a disk image, accessed through CP/M itself: the
@@ -1204,10 +1242,13 @@ def main(commands: list[str] | None = None) -> None:
     if commands and commands[0] in ('--help', '-h'):
         sys.exit(
             'CP/M-80 2.2 emulator.\n'
-            'usage: cpm80 [--help] [--temp-disk] [COMMAND...]\n'
+            'usage: cpm80 [--help] [--temp-disk] [--speed MHZ] '
+            '[COMMAND...]\n'
             '\n'
             'Options:\n'
             '  --temp-disk    Do not load the default disk image.\n'
+            '  --speed MHZ    Pace the CPU to MHZ million ticks a\n'
+            '                 second (the default runs it flat out).\n'
             '\n'
             'COMMAND is a CP/M or internal emulator command to execute\n'
             'automatically before taking input from console.\n'
@@ -1217,9 +1258,21 @@ def main(commands: list[str] | None = None) -> None:
 
     # TODO: Provide this functionality via a command.
     temp_disk = False
-    if commands and commands[0] == '--temp-disk':
-        temp_disk = True
-        del commands[0]
+    speed_mhz = None
+    while commands and commands[0].startswith('--'):
+        option = commands.pop(0)
+        if option == '--temp-disk':
+            temp_disk = True
+        elif option == '--speed':
+            if not commands:
+                sys.exit('cpm80: --speed needs a value')
+            value = commands.pop(0)
+            try:
+                speed_mhz = float(value)
+            except ValueError:
+                sys.exit(f'cpm80: invalid speed {value!r}')
+        else:
+            sys.exit(f'cpm80: unknown option {option!r}')
 
     console_reader = None
     if commands:
@@ -1251,7 +1304,8 @@ def main(commands: list[str] | None = None) -> None:
             print(f'cpm80: {warning}', file=sys.stderr)
 
         m = I8080CPMMachine(drives=[drive, host_drive],
-                            console_reader=console_reader)
+                            console_reader=console_reader,
+                            speed_mhz=speed_mhz)
 
         # Fresh disks get PIP, so files can be copied between
         # drives out of the box.
