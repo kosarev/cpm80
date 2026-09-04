@@ -470,10 +470,25 @@ class DisplayDevice:
     def __init__(self) -> None:
         self.__pending = 0
         self.__row = 0
+        self.__cursor_hidden = False
 
     def __write(self, s: str) -> None:
         sys.stdout.write(s)
         sys.stdout.flush()
+
+    # A program that positions the cursor is drawing a screen; hide
+    # the hardware cursor so it does not blink chasing the writes.
+    # show_cursor() brings it back when control returns to CCP (see
+    # on_wboot) and when the session ends.
+    def __hide_cursor(self) -> None:
+        if not self.__cursor_hidden:
+            self.__write('\x1b[?25l')
+            self.__cursor_hidden = True
+
+    def show_cursor(self) -> None:
+        if self.__cursor_hidden:
+            self.__write('\x1b[?25h')
+            self.__cursor_hidden = False
 
     def output(self, c: int) -> None:
         if self.__pending == 1:
@@ -494,6 +509,7 @@ class DisplayDevice:
             # from one.
             row = max(0, self.__row - 0x20) + 1
             col = max(0, c - 0x20) + 1
+            self.__hide_cursor()
             self.__write(f'\x1b[{row};{col}H')
             self.__pending = 0
             return
@@ -507,6 +523,7 @@ class DisplayDevice:
         if c == 0x1b:               # ESC
             self.__pending = 1
         elif c in SEQUENCES:
+            self.__hide_cursor()
             self.__write(SEQUENCES[c])
         else:
             self.__write(chr(c))
@@ -760,6 +777,12 @@ class CPMMachineMixin(_MachineBase):
     def on_wboot(self) -> None:
         for drive in self.__drives:
             drive.on_warm_boot()
+
+        # Back to CCP: a screen program that hid the cursor has
+        # ended, so the prompt gets it back.
+        show_cursor = getattr(self.__console_writer, 'show_cursor', None)
+        if show_cursor is not None:
+            show_cursor()
 
         self.set_memory_block(self.__CCP_BASE, _load_data('ccp.bin'))
 
@@ -1243,10 +1266,9 @@ class FileSystem:
 # so control keys -- Ctrl+C above all -- reach CP/M as ordinary
 # characters to read rather than acting on the host, and the
 # terminal leaves the echoing to CP/M's own console handling.  The
-# hardware cursor is hidden meanwhile: screen-oriented programs
-# reposition it constantly, and a blinking cursor chasing every
-# write is a distraction CP/M itself never intended.  Does nothing
-# without an interactive terminal.
+# cursor is shown again on the way out in case a program left it
+# hidden (see DisplayDevice).  Does nothing without an interactive
+# terminal.
 @contextlib.contextmanager
 def _console_session() -> collections.abc.Iterator[None]:
     if sys.platform != 'win32' and sys.stdin.isatty():
@@ -1254,11 +1276,9 @@ def _console_session() -> collections.abc.Iterator[None]:
         saved = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
-            sys.stdout.write('\x1b[?25l')       # hide the cursor
-            sys.stdout.flush()
             yield
         finally:
-            sys.stdout.write('\x1b[?25h')       # show it again
+            sys.stdout.write('\x1b[?25h')       # ensure cursor shown
             sys.stdout.flush()
             termios.tcsetattr(fd, termios.TCSADRAIN, saved)
     else:
