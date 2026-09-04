@@ -72,13 +72,13 @@ def test_r1715_machine_uses_the_r1715_terminal(
 
     # A tiny program that prints, via BDOS C_WRITESTR, an R1715
     # cursor address (ESC, row 2, column 5, both biased by 0x80)
-    # followed by the KOI-7 bytes for "ди", then returns to CCP.
+    # followed by the KOI-7 bytes for "ДИ", then returns to CCP.
     prog = bytes([0x11, 0x09, 0x01,       # LXI D, msg
                   0x0e, 0x09,             # MVI C, C_WRITESTR
                   0xcd, 0x05, 0x00,       # CALL BDOS
                   0xc9,                   # RET
                   0x1b, 0x82, 0x85,       # msg: ESC, row+0x80, col+0x80
-                  0x64, 0x69, ord('$')])  # 'd' 'i' in KOI-7: д и
+                  0x64, 0x69, ord('$')])  # 'd' 'i' in KOI-7: Д И
     fs = cpm80.FileSystem(cpm80.DiskImage(cpm80.DISK_FORMATS['r1715']))
     fs.write('prog.com', prog)
     image = tmp_path / 'disk.cpm'
@@ -88,7 +88,7 @@ def test_r1715_machine_uses_the_r1715_terminal(
 
     # The R1715 terminal turns the address into ANSI positioning and
     # the KOI-7 bytes into Cyrillic.
-    assert '\x1b[3;6Hди' in capsys.readouterr().out
+    assert '\x1b[3;6HДИ' in capsys.readouterr().out
 
 
 def test_mount_a_directory(capsys: pytest.CaptureFixture[str],

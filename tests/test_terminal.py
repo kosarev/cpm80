@@ -66,16 +66,16 @@ def test_r1715_text_passes_through() -> None:
 
 def test_koi7_maps_cyrillic_and_leaves_ascii() -> None:
     koi7 = cpm80.CHARSETS['koi7']
-    assert koi7.translate(0x7b) == 'ш'
-    assert koi7.translate(0x69) == 'и'
+    assert koi7.translate(0x7b) == 'Ш'
+    assert koi7.translate(0x69) == 'И'
     assert koi7.translate(ord('A')) == 'A'      # upper-case Latin
     assert koi7.translate(ord(' ')) == ' '
 
 
 def test_terminal_applies_its_charset_to_text() -> None:
     term = cpm80.R1715Terminal(cpm80.CHARSETS['koi7'])
-    out, _ = feed(term, b'priwet')              # KOI-7 for привет
-    assert out == 'привет'
+    out, _ = feed(term, b'priwet')              # KOI-7 for ПРИВЕТ
+    assert out == 'ПРИВЕТ'
 
 
 def test_default_charset_is_ascii() -> None:
