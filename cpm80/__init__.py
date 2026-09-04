@@ -139,6 +139,12 @@ DISK_FORMATS = {
     'korvet': DiskFormat(sectors_per_track=40, num_reserved_tracks=4,
                          block_size=2048, num_blocks=389,
                          num_dir_entries=128),
+
+    # Robotron 1715 SCP3, its 800K floppies (cpmtools calls it
+    # 17153): 160 tracks of five 1024-byte sectors, four reserved.
+    'r1715': DiskFormat(sectors_per_track=40, num_reserved_tracks=4,
+                        block_size=2048, num_blocks=390,
+                        num_dir_entries=128),
 }
 
 # The name predates the default format becoming this roomy.
@@ -1294,12 +1300,17 @@ def main(commands: list[str] | None = None) -> None:
         sys.exit(
             'CP/M-80 2.2 emulator.\n'
             'usage: cpm80 [--help] [--temp-disk] [--speed MHZ] '
-            '[COMMAND...]\n'
+            '[--r1715] [--mount TARGET]... [COMMAND...]\n'
             '\n'
             'Options:\n'
             '  --temp-disk    Do not load the default disk image.\n'
             '  --speed MHZ    Pace the CPU to MHZ million ticks a\n'
             '                 second (the default runs it flat out).\n'
+            '  --r1715        Emulate a Robotron 1715 (sets the disk\n'
+            '                 format for mounted images).\n'
+            '  --mount TARGET Add a drive: a directory is mirrored,\n'
+            '                 a file is mounted as a disk image.\n'
+            '                 Repeatable; drives follow in order.\n'
             '\n'
             'COMMAND is a CP/M or internal emulator command to execute\n'
             'automatically before taking input from console.\n'
@@ -1310,6 +1321,8 @@ def main(commands: list[str] | None = None) -> None:
     # TODO: Provide this functionality via a command.
     temp_disk = False
     speed_mhz = None
+    mounts = []
+    machine = 'cpm80'
     while commands and commands[0].startswith('--'):
         option = commands.pop(0)
         if option == '--temp-disk':
@@ -1322,6 +1335,12 @@ def main(commands: list[str] | None = None) -> None:
                 speed_mhz = float(value)
             except ValueError:
                 sys.exit(f'cpm80: invalid speed {value!r}')
+        elif option == '--mount':
+            if not commands:
+                sys.exit('cpm80: --mount needs a directory or image')
+            mounts.append(pathlib.Path(commands.pop(0)))
+        elif option == '--r1715':
+            machine = 'r1715'
         else:
             sys.exit(f'cpm80: unknown option {option!r}')
 
@@ -1333,34 +1352,64 @@ def main(commands: list[str] | None = None) -> None:
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
+    disk_path = data_dir / 'disk.img'
+    # The disk format the machine expects for mounted images; a cpm80
+    # image carries its own in a header.
+    image_format = DISK_FORMATS['r1715'] if machine == 'r1715' else None
+
     try:
-        disk_path = data_dir / 'disk.img'
-        disk_data = None
-        if not temp_disk:
-            try:
-                disk_data = disk_path.read_bytes()
-            except FileNotFoundError:
-                pass
+        drives: list[DiskDrive] = []
+        host_drives: list[HostDrive] = []
+        persist_image = None
+        seed_pip = False
 
-        params = (DiskFormat().params if disk_data is None
-                  else DiskImage.parse_header(disk_data))
-        image = DiskImage(DiskFormat(**params), data=disk_data)
-        drive = DiskDrive(image)
+        # The cpm80 machine keeps a home disk on A:.
+        if machine == 'cpm80':
+            disk_data = None
+            if not temp_disk:
+                try:
+                    disk_data = disk_path.read_bytes()
+                except FileNotFoundError:
+                    pass
+            params = (DiskFormat().params if disk_data is None
+                      else DiskImage.parse_header(disk_data))
+            home = DiskImage(DiskFormat(**params), data=disk_data)
+            drives.append(DiskDrive(home))
+            persist_image = home if not temp_disk else None
+            seed_pip = disk_data is None
 
-        # The current directory mounts as drive B:, except for the
-        # persistent disk image when the emulator runs in its own
-        # data directory.
-        host_drive = HostDrive(exclude=[disk_path])
-        for warning in host_drive.warnings:
-            print(f'cpm80: {warning}', file=sys.stderr)
+        # Each --mount is a directory (mirrored) or an image file.
+        # Images and the home disk are kept out of a mirrored
+        # directory.
+        exclude = [disk_path] + [m for m in mounts if m.is_file()]
+        for target in mounts:
+            if target.is_dir():
+                host = HostDrive(target, exclude=exclude)
+                host_drives.append(host)
+                drives.append(host)
+            elif target.is_file():
+                data = target.read_bytes()
+                fmt = (image_format if image_format is not None
+                       else DiskFormat(**DiskImage.parse_header(data)))
+                drives.append(DiskDrive(
+                    DiskImage(fmt, data=data, store_format=False)))
+            else:
+                sys.exit(f'cpm80: no such directory or image: {target}')
 
-        m = I8080CPMMachine(drives=[drive, host_drive],
-                            console_reader=console_reader,
+        # A machine with no disk yet gets an empty one to fill.
+        if not drives:
+            drives.append(DiskDrive(DiskImage(image_format or DiskFormat())))
+
+        for host in host_drives:
+            for warning in host.warnings:
+                print(f'cpm80: {warning}', file=sys.stderr)
+
+        m = I8080CPMMachine(drives=drives, console_reader=console_reader,
                             speed_mhz=speed_mhz)
 
-        # Fresh disks get PIP, so files can be copied between
-        # drives out of the box.
-        if disk_data is None:
+        # A fresh home disk gets PIP, so files copy between drives out
+        # of the box.
+        if seed_pip:
             m.make_file('pip.com')
             m.write_file(_load_data('pip.com'))
             m.close_file()
@@ -1374,9 +1423,10 @@ def main(commands: list[str] | None = None) -> None:
             # character): quit rather than show a traceback.
             pass
         finally:
-            if not temp_disk:
-                disk_path.write_bytes(image.data)
-            host_drive.flush_files()
+            if persist_image is not None:
+                disk_path.write_bytes(persist_image.data)
+            for host in host_drives:
+                host.flush_files()
     except Error as e:
         sys.exit(f'cpm80: {e}')
 

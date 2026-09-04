@@ -40,13 +40,13 @@ times to quit the emulator.
 
 ## Exchanging files with the host
 
-The directory cpm80 starts in is mounted as drive B:, and fresh
+`--mount <dir>` puts a host directory on the next drive, and fresh
 disks come with PIP, so files just copy.
 
 ```
 $ ls
 hello.txt
-$ cpm80
+$ cpm80 --mount .
 62k CP/M vers 2.2
 
 A>dir b:
@@ -58,8 +58,10 @@ $ ls
 DUMP.DAT  hello.txt
 ```
 
-A single <kbd>Ctrl</kbd> + <kbd>C</kbd> re-reads the directory --
-the usual CP/M way of telling the system the disk has changed.
+`--mount` also takes a disk image file instead of a directory.
+A single <kbd>Ctrl</kbd> + <kbd>C</kbd> re-reads a mounted
+directory -- the usual CP/M way of telling the system the disk has
+changed.
 
 
 ## Running commands automatically
