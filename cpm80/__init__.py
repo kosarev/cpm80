@@ -18,6 +18,7 @@ import typing
 import platformdirs
 import z80
 
+from ._error import Error as Error
 from ._filesystem import FileSystem as FileSystem
 
 if sys.platform == 'win32':
@@ -33,10 +34,6 @@ SECTOR_SIZE = 128
 def _load_data(filename: str) -> bytes:
     files = importlib.resources.files('cpm80')
     return files.joinpath(filename).read_bytes()
-
-
-class Error(BaseException):
-    pass
 
 
 class DiskFormat:
