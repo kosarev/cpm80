@@ -572,15 +572,19 @@ class CPMMachineMixin(_MachineBase):
     F_RENAME = 0x17
     F_DMAOFF = 0x1a
 
-    __BDOS_BASE = 0x9c00
+    # The CP/M system is relocated to a 62K configuration: CCP at
+    # 0xD000, BDOS at 0xD800, so the BIOS follows at 0xE600 and the
+    # TPA runs 0x0100-0xD000, about 53K -- enough for large
+    # programs.
+    __BDOS_BASE = 0xd800
     __BDOS_CODE_ENTRY = __BDOS_BASE + 0x11
 
-    __CCP_BASE = 0x9400
+    __CCP_BASE = 0xd000
     __CCP_READ_COMMAND = __CCP_BASE + 0x1aa
     __CCP_GET_COMMAND = __CCP_BASE + 0x385
     __CCP_RUN_COMMAND = __CCP_BASE + 0x398
 
-    __BIOS_BASE = 0xaa00
+    __BIOS_BASE = 0xe600
 
     # One RET per drive, right after the BIOS vectors: a
     # file-committing BDOS call returns through the RET of the
@@ -745,9 +749,9 @@ class CPMMachineMixin(_MachineBase):
         self.set_memory_block(self.__CURRENT_DISK_ADDR,
                               CURRENT_DISK.to_bytes(1, 'little'))
 
-        # The BIOS signon: a cold boot announces the system.  CCP
-        # at 0x9400 is the 44k memory configuration.
-        MEMORY_SIZE_K = 44
+        # The BIOS signon: a cold boot announces the system, sized
+        # by the 62K configuration the system is relocated for.
+        MEMORY_SIZE_K = 62
         for c in f'{MEMORY_SIZE_K}k CP/M vers 2.2\r\n':
             self.__console_writer.output(ord(c))
 

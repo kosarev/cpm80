@@ -63,7 +63,7 @@ def test_file_delete() -> None:
 def test_c_writestr(capsys: pytest.CaptureFixture[str]) -> None:
     m = cpm80.I8080CPMMachine()
     m.write_str('abc')
-    SIGNON = '44k CP/M vers 2.2\r\n'
+    SIGNON = '62k CP/M vers 2.2\r\n'
     assert capsys.readouterr().out == SIGNON + 'abc'
 
 
