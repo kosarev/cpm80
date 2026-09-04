@@ -8,15 +8,13 @@
 
 """The Robotron 1715: a Z80 CP/M with the R1715 terminal and glyphs.
 
-The machine registers itself in the package's MACHINES table when
-imported, so --r1715 finds it.
+main() imports this module when --r1715 is given.
 """
 
 import collections.abc
 
 from . import (
     DISK_FORMATS,
-    MACHINES,
     Charset,
     ConsoleReader,
     ConsoleWriter,
@@ -115,6 +113,3 @@ class R1715Machine(Z80CPMMachine):
             console_writer = DisplayDevice(terminal=R1715Terminal(CHARSET))
         super().__init__(drives=drives, console_reader=console_reader,
                          console_writer=console_writer, speed_mhz=speed_mhz)
-
-
-MACHINES['r1715'] = R1715Machine

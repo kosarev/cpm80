@@ -1293,15 +1293,6 @@ class Z80CPMMachine(CPMMachineMixin, z80.Z80Machine):  # type: ignore[misc]
                                  speed_mhz=speed_mhz)
 
 
-# The machines cpm80 can present, named for the command line.  The
-# default is the generic 8080 CP/M; a machine module adds its own (the
-# Robotron 1715 adds 'r1715', see the bottom of this file).  The home
-# disk is named after the machine (cpm80.img, r1715.img).
-MACHINES: dict[str, type[CPMMachineMixin]] = {
-    'cpm80': I8080CPMMachine,
-}
-
-
 # The files of a disk image, accessed through CP/M itself: the
 # operations run on a scratch machine with the image as its disk,
 # so the one file system implementation in play is the real BDOS.
@@ -1428,7 +1419,12 @@ def main(commands: list[str] | None = None) -> None:
     if commands:
         console_reader = StringKeyboard(*commands)
 
-    machine_class = MACHINES[machine]
+    # The default machine is the generic 8080 CP/M; the Robotron 1715
+    # lives in its own module, imported only when asked for.
+    machine_class: type[CPMMachineMixin] = I8080CPMMachine
+    if machine == 'r1715':
+        from ._r1715 import R1715Machine
+        machine_class = R1715Machine
 
     app_dirs = platformdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
@@ -1514,12 +1510,6 @@ def main(commands: list[str] | None = None) -> None:
                 host.flush_files()
     except Error as e:
         sys.exit(f'cpm80: {e}')
-
-
-# Importing the machine modules registers them in MACHINES above.
-# This side-effect import comes last, after the base classes they
-# build on.
-from . import _r1715  # noqa: E402, F401, I001
 
 
 if __name__ == '__main__':
