@@ -153,24 +153,32 @@ DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 # A machine cpm80 can present.  disk_format names (in DISK_FORMATS)
 # the format of its home disk and of foreign images mounted on it; a
-# cpm80-written image overrides it from its own header.  The home
-# disk is named after the machine (cpm80.img, r1715.img).  CPU,
-# terminal and character set will join here.
+# cpm80-written image overrides it from its own header.  terminal
+# names (in TERMINALS) the terminal the machine's programs expect.
+# The home disk is named after the machine (cpm80.img, r1715.img).
+# CPU and character set will join here.
 class MachineType:
-    def __init__(self, *, disk_format: str = 'default') -> None:
+    def __init__(self, *, disk_format: str = 'default',
+                 terminal: str = 'adm3a') -> None:
         self.__disk_format = disk_format
+        self.__terminal = terminal
 
     @property
     def disk_format(self) -> DiskFormat:
         return DISK_FORMATS[self.__disk_format]
 
+    @property
+    def terminal(self) -> 'collections.abc.Callable[[], Terminal]':
+        return TERMINALS[self.__terminal]
+
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(disk_format={self.__disk_format!r})'
+        return (f'{type(self).__name__}(disk_format={self.__disk_format!r}, '
+                f'terminal={self.__terminal!r})')
 
 
 MACHINES = {
     'cpm80': MachineType(),
-    'r1715': MachineType(disk_format='r1715'),
+    'r1715': MachineType(disk_format='r1715', terminal='r1715'),
 }
 
 
@@ -596,6 +604,13 @@ class R1715Terminal:
             self.draws_screen = True
             return '\x1b[2J\x1b[H'
         return chr(c)
+
+
+# The terminals a machine can select (see MACHINES).
+TERMINALS: dict[str, collections.abc.Callable[[], Terminal]] = {
+    'adm3a': ADM3ATerminal,
+    'r1715': R1715Terminal,
+}
 
 
 # Writes a terminal's output to the host tty and manages the hardware
@@ -1445,6 +1460,8 @@ def main(commands: list[str] | None = None) -> None:
     if commands:
         console_reader = StringKeyboard(*commands)
 
+    console_writer = DisplayDevice(terminal=MACHINES[machine].terminal())
+
     app_dirs = platformdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -1505,7 +1522,7 @@ def main(commands: list[str] | None = None) -> None:
                 print(f'cpm80: {warning}', file=sys.stderr)
 
         m = I8080CPMMachine(drives=drives, console_reader=console_reader,
-                            speed_mhz=speed_mhz)
+                            console_writer=console_writer, speed_mhz=speed_mhz)
 
         # A fresh home disk gets PIP, so files copy between drives out
         # of the box.
