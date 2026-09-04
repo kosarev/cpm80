@@ -9,6 +9,7 @@
 import collections.abc
 import contextlib
 import importlib.resources
+import os
 import pathlib
 import sys
 import time
@@ -390,21 +391,20 @@ class KeyboardDevice:
         self.__ctrl_c_count = 0
 
     def input(self) -> int | None:
-        # Borrowed from:
-        # https://stackoverflow.com/questions/510357/how-to-read-a-single-character-from-the-user
+        # The terminal is put in raw mode for the whole session (see
+        # _console_session), so a key is read straight from the file
+        # descriptor -- matching the descriptor-level ready() check,
+        # and without the mode change that would discard it.
         if sys.platform == 'win32':
             # Note that Ctrl+C comes as an ordinary character and
             # special keys come as two reads with a 0x00 or 0xe0
             # prefix, undecoded, just as escape sequences on Unix.
             ch = ord(msvcrt.getch())
         else:
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                tty.setraw(sys.stdin.fileno())
-                ch = ord(sys.stdin.read(1))
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            data = os.read(sys.stdin.fileno(), 1)
+            if not data:
+                return None     # end of input
+            ch = data[0]
 
         # Catch Ctrl+C.
         if ch == 3:
