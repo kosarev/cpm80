@@ -151,40 +151,6 @@ DISK_FORMATS = {
 DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 
-# A machine cpm80 can present.  disk_format names (in DISK_FORMATS)
-# the format of its home disk and of foreign images mounted on it; a
-# cpm80-written image overrides it from its own header.  terminal and
-# charset name (in TERMINALS and CHARSETS) the terminal the machine's
-# programs draw on and the character set they use.  The home disk is
-# named after the machine (cpm80.img, r1715.img).  A CPU will join
-# here.
-class MachineType:
-    def __init__(self, *, disk_format: str = 'default',
-                 terminal: str = 'adm3a', charset: str = 'ascii') -> None:
-        self.__disk_format = disk_format
-        self.__terminal = terminal
-        self.__charset = charset
-
-    @property
-    def disk_format(self) -> DiskFormat:
-        return DISK_FORMATS[self.__disk_format]
-
-    # A fresh terminal built with the machine's character set.
-    def make_terminal(self) -> 'Terminal':
-        return TERMINALS[self.__terminal](CHARSETS[self.__charset])
-
-    def __repr__(self) -> str:
-        return (f'{type(self).__name__}(disk_format={self.__disk_format!r}, '
-                f'terminal={self.__terminal!r}, charset={self.__charset!r})')
-
-
-MACHINES = {
-    'cpm80': MachineType(),
-    'r1715': MachineType(disk_format='r1715', terminal='r1715',
-                         charset='r1715'),
-}
-
-
 class DiskImage:
     __SIGNATURE = 'cpm80 disk image <https://pypi.org/project/cpm80>'
 
@@ -660,14 +626,6 @@ class R1715Terminal:
         return prefix + self.__charset.translate(c)
 
 
-# The terminals a machine can select (see MACHINES).  Each is built
-# with the machine's character set.
-TERMINALS: dict[str, collections.abc.Callable[[Charset], Terminal]] = {
-    'adm3a': ADM3ATerminal,
-    'r1715': R1715Terminal,
-}
-
-
 # Writes a terminal's output to the host tty and manages the hardware
 # cursor.  The translation itself is the terminal's; this is the sink.
 class DisplayDevice:
@@ -745,6 +703,11 @@ class CPMMachineMixin(_MachineBase):
     __CURRENT_DISK_ADDR = 0x0004
     __DEFAULT_FCB = 0x005c
     __TPA = 0x0100
+
+    # The format of this machine's home disk and of foreign images
+    # mounted on it; a cpm80-written image overrides it from its own
+    # header.  R1715Machine sets its own.
+    disk_format = DISK_FORMATS['default']
 
     BDOS_ENTRY = 0x0005
     C_WRITESTR = 9
@@ -1411,6 +1374,32 @@ class Z80CPMMachine(CPMMachineMixin, z80.Z80Machine):  # type: ignore[misc]
                                  speed_mhz=speed_mhz)
 
 
+# The Robotron 1715: the Z80 core wired to its disk format and, via
+# its default display, the R1715 terminal and character set.
+class R1715Machine(Z80CPMMachine):
+    disk_format = DISK_FORMATS['r1715']
+
+    def __init__(self, *,
+                 drives: collections.abc.Sequence[DiskDrive] | None = None,
+                 console_reader: ConsoleReader | None = None,
+                 console_writer: ConsoleWriter | None = None,
+                 speed_mhz: float | None = None) -> None:
+        if console_writer is None:
+            console_writer = DisplayDevice(
+                terminal=R1715Terminal(CHARSETS['r1715']))
+        super().__init__(drives=drives, console_reader=console_reader,
+                         console_writer=console_writer, speed_mhz=speed_mhz)
+
+
+# The machines cpm80 can present, named for the command line.  The
+# default is the generic 8080 CP/M; the home disk is named after the
+# machine (cpm80.img, r1715.img).
+MACHINES: dict[str, type[CPMMachineMixin]] = {
+    'cpm80': I8080CPMMachine,
+    'r1715': R1715Machine,
+}
+
+
 # The files of a disk image, accessed through CP/M itself: the
 # operations run on a scratch machine with the image as its disk,
 # so the one file system implementation in play is the real BDOS.
@@ -1537,14 +1526,14 @@ def main(commands: list[str] | None = None) -> None:
     if commands:
         console_reader = StringKeyboard(*commands)
 
-    console_writer = DisplayDevice(terminal=MACHINES[machine].make_terminal())
+    machine_class = MACHINES[machine]
 
     app_dirs = platformdirs.AppDirs('cpm80')
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     disk_path = data_dir / f'{machine}.img'
-    machine_format = MACHINES[machine].disk_format
+    machine_format = machine_class.disk_format
 
     # A cpm80-written image carries its own format; a foreign one
     # takes the machine's.
@@ -1598,8 +1587,8 @@ def main(commands: list[str] | None = None) -> None:
             for warning in host.warnings:
                 print(f'cpm80: {warning}', file=sys.stderr)
 
-        m = I8080CPMMachine(drives=drives, console_reader=console_reader,
-                            console_writer=console_writer, speed_mhz=speed_mhz)
+        m = machine_class(drives=drives, console_reader=console_reader,
+                          speed_mhz=speed_mhz)
 
         # A fresh home disk gets PIP, so files copy between drives out
         # of the box.
