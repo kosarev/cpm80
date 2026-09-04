@@ -57,6 +57,9 @@ cpm80 = ['*.bin', 'pip.com', 'py.typed']
 # Anchors the ruff project root, so the cpm80 package is recognised as
 # first-party regardless of the directory ruff is invoked from.
 
+# Match pycodestyle, so ruff does not keep imports on lines it rejects.
+line-length = 79
+
 [tool.ruff.lint]
 # Reject needlessly quoted type annotations.
 extend-select = ['UP037']
