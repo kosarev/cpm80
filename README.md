@@ -9,6 +9,11 @@ CP/M-80 2.2 emulator with Python API.
 
 Based on the fast and flexible [z80](https://github.com/kosarev/z80) emulator.
 
+Running the 1982 CP/M game Ladder, loaded straight from the host
+directory:
+
+![Ladder running under cpm80](ladder.gif)
+
 
 ## Installing
 
