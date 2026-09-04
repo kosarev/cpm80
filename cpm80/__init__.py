@@ -1242,8 +1242,11 @@ class FileSystem:
 # Holds the terminal in raw mode for a whole interactive session,
 # so control keys -- Ctrl+C above all -- reach CP/M as ordinary
 # characters to read rather than acting on the host, and the
-# terminal leaves the echoing to CP/M's own console handling.  Does
-# nothing without an interactive terminal.
+# terminal leaves the echoing to CP/M's own console handling.  The
+# hardware cursor is hidden meanwhile: screen-oriented programs
+# reposition it constantly, and a blinking cursor chasing every
+# write is a distraction CP/M itself never intended.  Does nothing
+# without an interactive terminal.
 @contextlib.contextmanager
 def _console_session() -> collections.abc.Iterator[None]:
     if sys.platform != 'win32' and sys.stdin.isatty():
@@ -1251,8 +1254,12 @@ def _console_session() -> collections.abc.Iterator[None]:
         saved = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
+            sys.stdout.write('\x1b[?25l')       # hide the cursor
+            sys.stdout.flush()
             yield
         finally:
+            sys.stdout.write('\x1b[?25h')       # show it again
+            sys.stdout.flush()
             termios.tcsetattr(fd, termios.TCSADRAIN, saved)
     else:
         yield
