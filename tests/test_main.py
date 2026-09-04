@@ -13,11 +13,18 @@ import pytest
 import cpm80
 
 
+@pytest.fixture(autouse=True)
+def _isolated_data_dir(monkeypatch: pytest.MonkeyPatch,
+                       tmp_path: pathlib.Path) -> None:
+    # Keep the home disk out of the real user data directory.
+    monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / '.data'))
+
+
 def test_commands(capsys: pytest.CaptureFixture[str],
                   monkeypatch: pytest.MonkeyPatch,
                   tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
-    cpm80.main(['--temp-disk', 'dir'])
+    cpm80.main(['dir'])
     SIGNON = '62k CP/M vers 2.2\r\n'
     assert capsys.readouterr().out == (SIGNON + '\r\nA>dir\r\r\n'
                                        'A: PIP      COM\r\nA>')
@@ -29,8 +36,8 @@ def test_copying_with_pip(capsys: pytest.CaptureFixture[str],
     monkeypatch.chdir(tmp_path)
     (tmp_path / 'hello.txt').write_bytes(b'hello from the host\x1a')
 
-    cpm80.main(['--temp-disk', '--mount', '.', 'pip a:=b:hello.txt',
-                'type hello.txt'])
+    # A: is the home disk (with PIP); --mount . puts the host on B:.
+    cpm80.main(['--mount', '.', 'pip a:=b:hello.txt', 'type hello.txt'])
 
     assert 'hello from the host' in capsys.readouterr().out
 
@@ -46,9 +53,9 @@ def test_mounting_an_r1715_image(capsys: pytest.CaptureFixture[str],
     image = tmp_path / 'disk.cpm'
     image.write_bytes(bytes(fs.image.data))
 
-    # The machine sets the format; --mount supplies the image, which
-    # becomes A: since the r1715 machine has no home disk.
-    cpm80.main(['--r1715', '--mount', str(image), 'dir'])
+    # --no-automount frees A: for the mounted image; --r1715 gives it
+    # the R1715 format.
+    cpm80.main(['--r1715', '--no-automount', '--mount', str(image), 'dir'])
     assert 'GAME     COM' in capsys.readouterr().out
 
     with pytest.raises(SystemExit):
@@ -65,11 +72,11 @@ def test_mount_a_directory(capsys: pytest.CaptureFixture[str],
     monkeypatch.chdir(tmp_path)
 
     # Without --mount there is no B: drive: selecting it errors.
-    cpm80.main(['--temp-disk', 'dir b:'])
+    cpm80.main(['--no-automount', 'dir b:'])
     assert 'Bdos Err On B' in capsys.readouterr().out
 
     # --mount <dir> mirrors it onto the next drive, B:.
-    cpm80.main(['--temp-disk', '--mount', 'sub', 'dir b:'])
+    cpm80.main(['--mount', 'sub', 'dir b:'])
     assert 'B: HELLO    TXT' in capsys.readouterr().out
 
 
@@ -78,8 +85,7 @@ def test_speed_option(capsys: pytest.CaptureFixture[str],
                       tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
 
-    # A valid speed runs the usual commands.
-    cpm80.main(['--temp-disk', '--speed', '4', 'dir'])
+    cpm80.main(['--speed', '4', 'dir'])
     assert 'PIP' in capsys.readouterr().out
 
     with pytest.raises(SystemExit):
@@ -96,23 +102,21 @@ def test_mounted_directory_warns_of_unmountable_files(
     (tmp_path / 'hello.txt').write_bytes(b'hello')
     (tmp_path / 'not a cpm name').write_bytes(b'x')
 
-    cpm80.main(['--temp-disk', '--mount', '.', 'dir b:'])
+    cpm80.main(['--mount', '.', 'dir b:'])
 
     out, err = capsys.readouterr()
     assert 'B: HELLO    TXT' in out
     assert 'not a cpm name' in err
 
 
-def test_disk_image_not_mirrored_from_data_dir(
-        capsys: pytest.CaptureFixture[str],
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: pathlib.Path) -> None:
-    # Run from the data directory itself and mount it, so the
-    # persistent disk image sits in the mirrored directory.
+def test_home_disk_not_mirrored(capsys: pytest.CaptureFixture[str],
+                                monkeypatch: pytest.MonkeyPatch,
+                                tmp_path: pathlib.Path) -> None:
+    # Put the data directory inside the mounted directory, so the
+    # home disk would be mirrored were it not excluded.
     monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path))
-    data_dir = tmp_path / 'cpm80'
-    data_dir.mkdir()
-    monkeypatch.chdir(data_dir)
+    (tmp_path / 'cpm80').mkdir()
+    monkeypatch.chdir(tmp_path / 'cpm80')
 
     cpm80.main(['--mount', '.', 'dir b:'])      # Creates disk.img.
     cpm80.main(['--mount', '.', 'dir b:'])      # Would mirror it.
@@ -123,9 +127,8 @@ def test_disk_image_not_mirrored_from_data_dir(
 
 
 def test_files_saved_on_a_mounted_directory_land_on_the_host(
-        capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: pathlib.Path) -> None:
     monkeypatch.chdir(tmp_path)
-    cpm80.main(['--temp-disk', '--mount', '.', 'save 1 b:x.dat'])
+    cpm80.main(['--mount', '.', 'save 1 b:x.dat'])
     assert (tmp_path / 'X.DAT').stat().st_size == 256

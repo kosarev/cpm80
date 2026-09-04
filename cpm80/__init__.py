@@ -151,6 +151,22 @@ DISK_FORMATS = {
 DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 
+# The machines cpm80 can present.  Each names its home-disk file and
+# the disk format for that disk and for images mounted on it; a
+# disk_format of None means the cpm80-native format, which each
+# image carries in its own header.  (CPU, terminal and character set
+# will join here.)
+class MachineSpec(typing.TypedDict):
+    home: str
+    disk_format: DiskFormat | None
+
+
+MACHINES: dict[str, MachineSpec] = {
+    'cpm80': {'home': 'disk.img', 'disk_format': None},
+    'r1715': {'home': 'r1715.img', 'disk_format': DISK_FORMATS['r1715']},
+}
+
+
 class DiskImage:
     __SIGNATURE = 'cpm80 disk image <https://pypi.org/project/cpm80>'
 
@@ -1299,15 +1315,16 @@ def main(commands: list[str] | None = None) -> None:
     if commands and commands[0] in ('--help', '-h'):
         sys.exit(
             'CP/M-80 2.2 emulator.\n'
-            'usage: cpm80 [--help] [--temp-disk] [--speed MHZ] '
+            'usage: cpm80 [--help] [--no-automount] [--speed MHZ] '
             '[--r1715] [--mount TARGET]... [COMMAND...]\n'
             '\n'
             'Options:\n'
-            '  --temp-disk    Do not load the default disk image.\n'
+            '  --no-automount Do not put the persistent home disk on\n'
+            '                 A:; the first --mount takes it instead.\n'
             '  --speed MHZ    Pace the CPU to MHZ million ticks a\n'
             '                 second (the default runs it flat out).\n'
-            '  --r1715        Emulate a Robotron 1715 (sets the disk\n'
-            '                 format for mounted images).\n'
+            '  --r1715        Emulate a Robotron 1715 (its own home\n'
+            '                 disk and disk format).\n'
             '  --mount TARGET Add a drive: a directory is mirrored,\n'
             '                 a file is mounted as a disk image.\n'
             '                 Repeatable; drives follow in order.\n'
@@ -1319,14 +1336,14 @@ def main(commands: list[str] | None = None) -> None:
             '  exit           Terminate emulation and quit.')
 
     # TODO: Provide this functionality via a command.
-    temp_disk = False
+    no_automount = False
     speed_mhz = None
     mounts = []
     machine = 'cpm80'
     while commands and commands[0].startswith('--'):
         option = commands.pop(0)
-        if option == '--temp-disk':
-            temp_disk = True
+        if option == '--no-automount':
+            no_automount = True
         elif option == '--speed':
             if not commands:
                 sys.exit('cpm80: --speed needs a value')
@@ -1352,10 +1369,11 @@ def main(commands: list[str] | None = None) -> None:
     data_dir = pathlib.Path(app_dirs.user_data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    disk_path = data_dir / 'disk.img'
-    # The disk format the machine expects for mounted images; a cpm80
-    # image carries its own in a header.
-    image_format = DISK_FORMATS['r1715'] if machine == 'r1715' else None
+    spec = MACHINES[machine]
+    disk_path = data_dir / spec['home']
+    # The format for the home disk and for images mounted on this
+    # machine; None means the cpm80-native format from each header.
+    image_format = spec['disk_format']
 
     try:
         drives: list[DiskDrive] = []
@@ -1363,19 +1381,20 @@ def main(commands: list[str] | None = None) -> None:
         persist_image = None
         seed_pip = False
 
-        # The cpm80 machine keeps a home disk on A:.
-        if machine == 'cpm80':
+        # The machine's home disk goes on A: unless suppressed.
+        if not no_automount:
             disk_data = None
-            if not temp_disk:
-                try:
-                    disk_data = disk_path.read_bytes()
-                except FileNotFoundError:
-                    pass
-            params = (DiskFormat().params if disk_data is None
-                      else DiskImage.parse_header(disk_data))
-            home = DiskImage(DiskFormat(**params), data=disk_data)
+            try:
+                disk_data = disk_path.read_bytes()
+            except FileNotFoundError:
+                pass
+            if disk_data is not None:
+                fmt = DiskFormat(**DiskImage.parse_header(disk_data))
+            else:
+                fmt = image_format or DiskFormat()
+            home = DiskImage(fmt, data=disk_data)
             drives.append(DiskDrive(home))
-            persist_image = home if not temp_disk else None
+            persist_image = home
             seed_pip = disk_data is None
 
         # Each --mount is a directory (mirrored) or an image file.
@@ -1396,9 +1415,11 @@ def main(commands: list[str] | None = None) -> None:
             else:
                 sys.exit(f'cpm80: no such directory or image: {target}')
 
-        # A machine with no disk yet gets an empty one to fill.
+        # With no home disk and nothing mounted, A: is a fresh disk
+        # to fill; give it PIP too.
         if not drives:
             drives.append(DiskDrive(DiskImage(image_format or DiskFormat())))
+            seed_pip = True
 
         for host in host_drives:
             for warning in host.warnings:
