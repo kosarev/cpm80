@@ -33,10 +33,10 @@ def test_bad_header() -> None:
 def test_sector_bounds() -> None:
     image = cpm80.DiskImage(cpm80.DiskFormat())
 
-    # The default format is 160 tracks of 40 sectors.
-    assert len(image.get_sector(39, 159)) == cpm80.SECTOR_SIZE
+    # The default format is 1001 tracks of 64 sectors.
+    assert len(image.get_sector(63, 1000)) == cpm80.SECTOR_SIZE
 
-    for sector, track in (40, 0), (0, 160), (-1, 0), (0, -1):
+    for sector, track in (64, 0), (0, 1001), (-1, 0), (0, -1):
         with pytest.raises(cpm80.Error):
             image.get_sector(sector, track)
 

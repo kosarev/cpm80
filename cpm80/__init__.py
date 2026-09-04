@@ -34,10 +34,12 @@ class Error(BaseException):
 
 
 class DiskFormat:
-    def __init__(self, *, sectors_per_track: int = 40,
-                 num_reserved_tracks: int = 2, block_size: int = 2048,
-                 num_blocks: int = 395,
-                 num_dir_entries: int = 128) -> None:
+    # The defaults describe a roomy synthetic disk of nearly the
+    # 8M the file system supports.
+    def __init__(self, *, sectors_per_track: int = 64,
+                 num_reserved_tracks: int = 1, block_size: int = 16384,
+                 num_blocks: int = 500,
+                 num_dir_entries: int = 512) -> None:
         def _div_ceil(a: int, b: int) -> int:
             return -(a // -b)
 
@@ -130,14 +132,13 @@ DISK_FORMATS = {
     # Also used on Orion 128 machines. The number of blocks is
     # one less than it could be, likely due to a mistake, so the
     # last block is never used.
-    'korvet': DiskFormat(num_reserved_tracks=4, num_blocks=389),
-
-    # A roomy synthetic format for drives mirroring host
-    # directories: nearly the 8M the file system supports.
-    'host': DiskFormat(sectors_per_track=64, num_reserved_tracks=1,
-                       block_size=16384, num_blocks=500,
-                       num_dir_entries=512),
+    'korvet': DiskFormat(sectors_per_track=40, num_reserved_tracks=4,
+                         block_size=2048, num_blocks=389,
+                         num_dir_entries=128),
 }
+
+# The name predates the default format becoming this roomy.
+DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 
 class DiskImage:
