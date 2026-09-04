@@ -118,12 +118,12 @@ def test_home_disk_not_mirrored(capsys: pytest.CaptureFixture[str],
     (tmp_path / 'cpm80').mkdir()
     monkeypatch.chdir(tmp_path / 'cpm80')
 
-    cpm80.main(['--mount', '.', 'dir b:'])      # Creates disk.img.
+    cpm80.main(['--mount', '.', 'dir b:'])      # Creates cpm80.img.
     cpm80.main(['--mount', '.', 'dir b:'])      # Would mirror it.
 
     out, err = capsys.readouterr()
     assert 'no space left' not in err
-    assert 'B: DISK     IMG' not in out
+    assert 'B: CPM80    IMG' not in out
 
 
 def test_files_saved_on_a_mounted_directory_land_on_the_host(
