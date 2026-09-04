@@ -7,6 +7,7 @@
 #   Published under the MIT license.
 
 import collections.abc
+import contextlib
 import importlib.resources
 import pathlib
 import sys
@@ -1234,6 +1235,25 @@ class FileSystem:
         self.__machine.delete_file(filename)
 
 
+# Holds the terminal in raw mode for a whole interactive session,
+# so control keys -- Ctrl+C above all -- reach CP/M as ordinary
+# characters to read rather than acting on the host, and the
+# terminal leaves the echoing to CP/M's own console handling.  Does
+# nothing without an interactive terminal.
+@contextlib.contextmanager
+def _console_session() -> collections.abc.Iterator[None]:
+    if sys.platform != 'win32' and sys.stdin.isatty():
+        fd = sys.stdin.fileno()
+        saved = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            yield
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    else:
+        yield
+
+
 def main(commands: list[str] | None = None) -> None:
     if commands is None:
         commands = sys.argv[1:]
@@ -1315,7 +1335,13 @@ def main(commands: list[str] | None = None) -> None:
             m.close_file()
 
         try:
-            m.run()
+            with _console_session():
+                m.run()
+        except KeyboardInterrupt:
+            # Reached only where the terminal is not in raw mode
+            # (so Ctrl+C stays a host interrupt rather than a
+            # character): quit rather than show a traceback.
+            pass
         finally:
             if not temp_disk:
                 disk_path.write_bytes(image.data)
