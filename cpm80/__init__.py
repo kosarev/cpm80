@@ -560,6 +560,44 @@ class ADM3ATerminal:
         return chr(c)
 
 
+# The Robotron 1715 terminal.  Its cursor addressing is ESC followed
+# by a row byte and a column byte, each biased by 0x80.  Form feed
+# clears the screen.  This covers what the R1715 games observed emit;
+# their Cyrillic text is a separate character-set concern.
+class R1715Terminal:
+    # Waiting for the rest of a sequence: 0 none, 1 want the row byte,
+    # 2 want the column byte.
+    def __init__(self) -> None:
+        self.__pending = 0
+        self.__row = 0
+        self.draws_screen = False
+
+    def translate(self, c: int) -> str:
+        self.draws_screen = False
+
+        if self.__pending == 1:
+            self.__row = c
+            self.__pending = 2
+            return ''
+
+        if self.__pending == 2:
+            # The row and column are biased by 0x80; ANSI counts from
+            # one.
+            row = max(0, self.__row - 0x80) + 1
+            col = max(0, c - 0x80) + 1
+            self.__pending = 0
+            self.draws_screen = True
+            return f'\x1b[{row};{col}H'
+
+        if c == 0x1b:               # ESC introduces a cursor position
+            self.__pending = 1
+            return ''
+        if c == 0x0c:               # form feed clears the screen
+            self.draws_screen = True
+            return '\x1b[2J\x1b[H'
+        return chr(c)
+
+
 # Writes a terminal's output to the host tty and manages the hardware
 # cursor.  The translation itself is the terminal's; this is the sink.
 class DisplayDevice:

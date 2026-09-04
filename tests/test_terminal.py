@@ -9,7 +9,7 @@
 import cpm80
 
 
-def feed(term: cpm80.ADM3ATerminal, data: bytes) -> tuple[str, bool]:
+def feed(term: cpm80.Terminal, data: bytes) -> tuple[str, bool]:
     # The ANSI text for the whole input, and whether the last byte
     # drew on the screen.
     out = ''
@@ -42,4 +42,23 @@ def test_cursor_addressing() -> None:
 def test_unknown_escape_passes_through() -> None:
     out, draws = feed(cpm80.ADM3ATerminal(), b'\x1bZ')
     assert out == '\x1bZ'
+    assert not draws
+
+
+def test_r1715_cursor_addressing() -> None:
+    # ESC <row+0x80> <col+0x80>; ANSI counts from one.
+    out, draws = feed(cpm80.R1715Terminal(), b'\x1b' + bytes([0x82, 0x85]))
+    assert out == '\x1b[3;6H'
+    assert draws
+
+
+def test_r1715_form_feed_clears() -> None:
+    out, draws = feed(cpm80.R1715Terminal(), b'\x0c')
+    assert out == '\x1b[2J\x1b[H'
+    assert draws
+
+
+def test_r1715_text_passes_through() -> None:
+    out, draws = feed(cpm80.R1715Terminal(), b'Hi')
+    assert out == 'Hi'
     assert not draws
