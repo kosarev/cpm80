@@ -7,7 +7,7 @@
 #   Published under the MIT license.
 
 import cpm80
-from cpm80._r1715 import R1715Terminal
+from cpm80._r1715 import CHARSET, R1715Terminal
 
 
 def feed(term: cpm80.Terminal, data: bytes) -> tuple[str, bool]:
@@ -66,16 +66,15 @@ def test_r1715_text_passes_through() -> None:
 
 
 def test_r1715_charset_maps_cyrillic_block_and_leaves_ascii() -> None:
-    r1715 = cpm80.CHARSETS['r1715']
-    assert r1715.translate(0x7b) == 'Ш'
-    assert r1715.translate(0x69) == 'И'
-    assert r1715.translate(0xff) == '█'         # the solid cell
-    assert r1715.translate(ord('A')) == 'A'     # upper-case Latin
-    assert r1715.translate(ord(' ')) == ' '
+    assert CHARSET.translate(0x7b) == 'Ш'
+    assert CHARSET.translate(0x69) == 'И'
+    assert CHARSET.translate(0xff) == '█'         # the solid cell
+    assert CHARSET.translate(ord('A')) == 'A'     # upper-case Latin
+    assert CHARSET.translate(ord(' ')) == ' '
 
 
 def test_terminal_applies_its_charset_to_text() -> None:
-    term = R1715Terminal(cpm80.CHARSETS['r1715'])
+    term = R1715Terminal(CHARSET)
     out, _ = feed(term, b'priwet')              # R1715 glyphs: ПРИВЕТ
     assert out == 'ПРИВЕТ'
 

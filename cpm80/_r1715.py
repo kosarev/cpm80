@@ -8,14 +8,13 @@
 
 """The Robotron 1715: a Z80 CP/M with the R1715 terminal and glyphs.
 
-The machine registers itself in the package's MACHINES and CHARSETS
-tables when imported, so --r1715 finds it.
+The machine registers itself in the package's MACHINES table when
+imported, so --r1715 finds it.
 """
 
 import collections.abc
 
 from . import (
-    CHARSETS,
     DISK_FORMATS,
     MACHINES,
     Charset,
@@ -118,5 +117,4 @@ class R1715Machine(Z80CPMMachine):
                          console_writer=console_writer, speed_mhz=speed_mhz)
 
 
-CHARSETS['r1715'] = CHARSET
 MACHINES['r1715'] = R1715Machine

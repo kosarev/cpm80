@@ -481,13 +481,6 @@ class Charset:
         return self.__mapping.get(c, chr(c))
 
 
-# The character sets a machine can select (see MACHINES).  A machine
-# module registers its own; the Robotron 1715 adds 'r1715'.
-CHARSETS = {
-    'ascii': Charset({}),
-}
-
-
 # Translates the control codes a CP/M program emits for its terminal
 # into ANSI for the host terminal.  A machine selects which terminal
 # it emulates.  translate() returns the display text for one output
@@ -1523,9 +1516,9 @@ def main(commands: list[str] | None = None) -> None:
         sys.exit(f'cpm80: {e}')
 
 
-# Importing the machine modules registers them in MACHINES and
-# CHARSETS above.  This side-effect import comes last, after the base
-# classes they build on.
+# Importing the machine modules registers them in MACHINES above.
+# This side-effect import comes last, after the base classes they
+# build on.
 from . import _r1715  # noqa: E402, F401, I001
 
 
