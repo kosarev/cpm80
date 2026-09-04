@@ -7,7 +7,7 @@
 #   Published under the MIT license.
 
 import cpm80
-from cpm80._r1715 import CHARSET, R1715Terminal
+from cpm80._r1715 import R1715Terminal
 
 
 def feed(term: cpm80.Terminal, data: bytes) -> tuple[str, bool]:
@@ -59,27 +59,25 @@ def test_r1715_form_feed_clears() -> None:
     assert draws
 
 
-def test_r1715_text_passes_through() -> None:
-    out, draws = feed(R1715Terminal(), b'Hi')
-    assert out == 'Hi'
+def test_r1715_plain_text_is_not_screen_drawing() -> None:
+    out, draws = feed(R1715Terminal(), b'HI')   # unmapped ASCII
+    assert out == 'HI'
     assert not draws
 
 
-def test_r1715_charset_maps_cyrillic_block_and_leaves_ascii() -> None:
-    assert CHARSET.translate(0x7b) == 'Ш'
-    assert CHARSET.translate(0x69) == 'И'
-    assert CHARSET.translate(0xff) == '█'         # the solid cell
-    assert CHARSET.translate(ord('A')) == 'A'     # upper-case Latin
-    assert CHARSET.translate(ord(' ')) == ' '
+def test_r1715_glyphs_map_cyrillic_and_block_and_leave_ascii() -> None:
+    # '{' and 'i' are Cyrillic, 0xff is the solid cell, 'A' and space
+    # stay ASCII.
+    out, _ = feed(R1715Terminal(), b'{i\xffA ')
+    assert out == 'ШИ█A '
 
 
-def test_terminal_applies_its_charset_to_text() -> None:
-    term = R1715Terminal(CHARSET)
-    out, _ = feed(term, b'priwet')              # R1715 glyphs: ПРИВЕТ
+def test_r1715_shows_text_through_its_glyphs() -> None:
+    out, _ = feed(R1715Terminal(), b'priwet')   # R1715 glyphs: ПРИВЕТ
     assert out == 'ПРИВЕТ'
 
 
-def test_default_charset_is_ascii() -> None:
+def test_adm3a_text_is_ascii() -> None:
     out, _ = feed(cpm80.ADM3ATerminal(), b'abz')
     assert out == 'abz'
 

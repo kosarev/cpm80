@@ -15,7 +15,6 @@ import collections.abc
 
 from . import (
     DISK_FORMATS,
-    Charset,
     ConsoleReader,
     ConsoleWriter,
     DiskDrive,
@@ -26,7 +25,8 @@ from . import (
 # The Robotron 1715 glyphs that differ from ASCII: capital Cyrillic
 # where ASCII has the lower-case letters and the symbols after them
 # (the KOI-7 N2 layout, GOST 13052), and a solid block at 0xff that
-# its games fill the screen with.
+# its games fill the screen with.  This is the machine's character
+# ROM; everything else shows its own ASCII character.
 _GLYPHS = {
     0x60: 'Ю', 0x61: 'А', 0x62: 'Б', 0x63: 'Ц', 0x64: 'Д', 0x65: 'Е',
     0x66: 'Ф', 0x67: 'Г', 0x68: 'Х', 0x69: 'И', 0x6a: 'Й', 0x6b: 'К',
@@ -36,7 +36,6 @@ _GLYPHS = {
     0x7e: 'Ч', 0x7f: 'Ъ',
     0xff: '█',
 }
-CHARSET = Charset(_GLYPHS)
 
 
 # The Robotron 1715 terminal.  Its cursor addressing is ESC followed
@@ -44,15 +43,14 @@ CHARSET = Charset(_GLYPHS)
 # clears the screen.  Its games draw the screen as a plain run of
 # characters and rely on the terminal to wrap to the next line at the
 # right edge, so this tracks the cursor column and wraps at the
-# screen width.  This covers what the R1715 games observed emit; their
-# Cyrillic text is handled by the character set.
+# screen width.  This covers what the R1715 games observed emit; text
+# shows through the R1715 glyphs above.
 class R1715Terminal:
     __WIDTH = 80
 
     # Waiting for the rest of a sequence: 0 none, 1 want the row byte,
     # 2 want the column byte.
-    def __init__(self, charset: Charset | None = None) -> None:
-        self.__charset = charset if charset is not None else Charset({})
+    def __init__(self) -> None:
         self.__pending = 0
         self.__row = 0
         self.__col = 0
@@ -87,20 +85,20 @@ class R1715Terminal:
             self.__col = 0
             return '\r'
         if c < 0x20:                # other controls do not move the column
-            return self.__charset.translate(c)
+            return chr(c)
 
         # A printable character.  Wrap to the next line before it if
-        # the row is full.
+        # the row is full, then show it through the glyphs.
         prefix = ''
         if self.__col >= self.__WIDTH:
             prefix = '\r\n'
             self.__col = 0
         self.__col += 1
-        return prefix + self.__charset.translate(c)
+        return prefix + _GLYPHS.get(c, chr(c))
 
 
 # The Z80 core wired to the R1715 disk format and, via its default
-# display, the R1715 terminal and character set.
+# display, the R1715 terminal and glyphs.
 class R1715Machine(Z80CPMMachine):
     disk_format = DISK_FORMATS['r1715']
 
@@ -110,6 +108,6 @@ class R1715Machine(Z80CPMMachine):
                  console_writer: ConsoleWriter | None = None,
                  speed_mhz: float | None = None) -> None:
         if console_writer is None:
-            console_writer = DisplayDevice(terminal=R1715Terminal(CHARSET))
+            console_writer = DisplayDevice(terminal=R1715Terminal())
         super().__init__(drives=drives, console_reader=console_reader,
                          console_writer=console_writer, speed_mhz=speed_mhz)

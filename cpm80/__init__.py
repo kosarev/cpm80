@@ -469,23 +469,11 @@ class StringKeyboard:
         return False
 
 
-# A character set maps a byte to the glyph a machine shows for it.
-# The default is ASCII, where a byte shows its own character.  A
-# machine with its own character generator (the R1715) has its own
-# set.
-class Charset:
-    def __init__(self, mapping: dict[int, str]) -> None:
-        self.__mapping = mapping
-
-    def translate(self, c: int) -> str:
-        return self.__mapping.get(c, chr(c))
-
-
 # Translates the control codes a CP/M program emits for its terminal
 # into ANSI for the host terminal.  A machine selects which terminal
 # it emulates.  translate() returns the display text for one output
-# byte: its character through the terminal's character set, or the
-# ANSI for a control code.  After a byte that moves or clears the
+# byte: its own character, mapped through the terminal's glyphs, or
+# the ANSI for a control code.  After a byte that moves or clears the
 # cursor it sets draws_screen, so the display can hide the blinking
 # hardware cursor while a program paints the screen.
 class Terminal(typing.Protocol):
@@ -495,12 +483,12 @@ class Terminal(typing.Protocol):
         ...
 
 
-# The ADM-3A, the terminal the bundled CP/M expects.
+# The ADM-3A, the terminal the bundled CP/M expects.  Its glyphs are
+# plain ASCII.
 class ADM3ATerminal:
     # Waiting for the rest of an escape sequence: 0 none, 1 seen
     # ESC, 2 want the row byte, 3 want the column byte.
-    def __init__(self, charset: Charset | None = None) -> None:
-        self.__charset = charset if charset is not None else Charset({})
+    def __init__(self) -> None:
         self.__pending = 0
         self.__row = 0
         self.draws_screen = False
@@ -542,7 +530,7 @@ class ADM3ATerminal:
         if c in SEQUENCES:
             self.draws_screen = True
             return SEQUENCES[c]
-        return self.__charset.translate(c)
+        return chr(c)
 
 
 # Writes a terminal's output to the host tty and manages the hardware
