@@ -456,10 +456,58 @@ class StringKeyboard:
         return False
 
 
+# Presents the console as an ADM-3A terminal, the one screen-
+# oriented CP/M software was most often set up for.  Plain text and
+# the ordinary CR, LF, tab and bell pass straight through, so a
+# modern terminal shows them unchanged; the ADM-3A cursor controls
+# and its ESC= cursor addressing are translated to the ANSI
+# sequences modern terminals understand.
 class DisplayDevice:
-    def output(self, c: int) -> None:
-        sys.stdout.write(chr(c))
+    # Waiting for the rest of an escape sequence: 0 none, 1 seen
+    # ESC, 2 want the row byte, 3 want the column byte.
+    def __init__(self) -> None:
+        self.__pending = 0
+        self.__row = 0
+
+    def __write(self, s: str) -> None:
+        sys.stdout.write(s)
         sys.stdout.flush()
+
+    def output(self, c: int) -> None:
+        if self.__pending == 1:
+            if c == ord('='):       # ESC= loads the cursor position
+                self.__pending = 2
+            else:                   # some other escape; pass it on
+                self.__write('\x1b' + chr(c))
+                self.__pending = 0
+            return
+
+        if self.__pending == 2:
+            self.__row = c
+            self.__pending = 3
+            return
+
+        if self.__pending == 3:
+            # The row and column are biased by a space; ANSI counts
+            # from one.
+            row = max(0, self.__row - 0x20) + 1
+            col = max(0, c - 0x20) + 1
+            self.__write(f'\x1b[{row};{col}H')
+            self.__pending = 0
+            return
+
+        SEQUENCES = {
+            0x0b: '\x1b[A',         # cursor up
+            0x0c: '\x1b[C',         # cursor right
+            0x1a: '\x1b[2J\x1b[H',  # clear screen and home
+            0x1e: '\x1b[H',         # home
+        }
+        if c == 0x1b:               # ESC
+            self.__pending = 1
+        elif c in SEQUENCES:
+            self.__write(SEQUENCES[c])
+        else:
+            self.__write(chr(c))
 
 
 class StringDisplay:
