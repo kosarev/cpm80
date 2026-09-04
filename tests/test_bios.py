@@ -92,3 +92,32 @@ def test_sector_io_errors() -> None:
     assert m.a == 1
     m.on_write()
     assert m.a == 1
+
+
+def test_z80_machine_runs_z80_instructions() -> None:
+    # DJNZ is a Z80 instruction the 8080 lacks.  This program uses it
+    # to print 'Z' three times, so running it proves the Z80 core.
+    code = z80.Code()
+    code.start_block(0x100)
+    loop = code.get_symbol('loop')
+    code.add(z80.LD(z80.B, 3),
+             z80.LabelDef(loop),
+             z80.LD(z80.E, ord('Z')),
+             z80.LD(z80.C, 2),          # C_WRITE (the character is in E)
+             z80.PUSH(z80.BC),
+             z80.CALL(cpm80.I8080CPMMachine.BDOS_ENTRY),
+             z80.POP(z80.BC),
+             z80.DJNZ(loop),
+             z80.RET())
+    code.resolve()
+    prog = b''.join(block for _, block in code.encode())
+
+    fs = cpm80.FileSystem(cpm80.DiskImage(cpm80.DiskFormat()))
+    fs.write('zz.com', prog)
+
+    display = cpm80.StringDisplay()
+    m = cpm80.Z80CPMMachine(drives=[cpm80.DiskDrive(fs.image)],
+                            console_reader=cpm80.StringKeyboard('zz'),
+                            console_writer=display)
+    m.run()
+    assert 'ZZZ' in display.string

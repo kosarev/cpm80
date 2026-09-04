@@ -1393,6 +1393,24 @@ class I8080CPMMachine(CPMMachineMixin, z80.I8080Machine):
                                  speed_mhz=speed_mhz)
 
 
+# The same CP/M on a Z80 core, for software that uses Z80
+# instructions -- the U880 of the Robotron 1715 is a Z80.  The mixin
+# is typed against the 8080 machine, so mypy sees its run() override
+# as clashing with the Z80 machine's; the override is deliberate, the
+# same one I8080CPMMachine gets for free.
+class Z80CPMMachine(CPMMachineMixin, z80.Z80Machine):  # type: ignore[misc]
+    def __init__(self, *,
+                 drives: collections.abc.Sequence[DiskDrive] | None = None,
+                 console_reader: ConsoleReader | None = None,
+                 console_writer: ConsoleWriter | None = None,
+                 speed_mhz: float | None = None) -> None:
+        z80.Z80Machine.__init__(self)
+        CPMMachineMixin.__init__(self, drives=drives,
+                                 console_reader=console_reader,
+                                 console_writer=console_writer,
+                                 speed_mhz=speed_mhz)
+
+
 # The files of a disk image, accessed through CP/M itself: the
 # operations run on a scratch machine with the image as its disk,
 # so the one file system implementation in play is the real BDOS.
