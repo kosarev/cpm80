@@ -151,18 +151,22 @@ DISK_FORMATS = {
 DISK_FORMATS['host'] = DISK_FORMATS['default']
 
 
-# The machines cpm80 can present.  Each fixes the disk format for
-# its home disk and for images mounted on it; None means the
-# cpm80-native format, which each image carries in its own header.
-# The home disk is named after the machine (cpm80.img, r1715.img).
-# (CPU, terminal and character set will join here.)
-class MachineSpec(typing.TypedDict):
-    disk_format: DiskFormat | None
+# A machine cpm80 can present.  disk_format fixes the format of its
+# home disk and of images mounted on it; None means the cpm80-native
+# format, which each image carries in its own header.  The home disk
+# is named after the machine (cpm80.img, r1715.img).  CPU, terminal
+# and character set will join here.
+class MachineType:
+    def __init__(self, *, disk_format: DiskFormat | None = None) -> None:
+        self.disk_format = disk_format
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(disk_format={self.disk_format!r})'
 
 
-MACHINES: dict[str, MachineSpec] = {
-    'cpm80': {'disk_format': None},
-    'r1715': {'disk_format': DISK_FORMATS['r1715']},
+MACHINES = {
+    'cpm80': MachineType(),
+    'r1715': MachineType(disk_format=DISK_FORMATS['r1715']),
 }
 
 
@@ -1371,7 +1375,7 @@ def main(commands: list[str] | None = None) -> None:
     disk_path = data_dir / f'{machine}.img'
     # The format for the home disk and for images mounted on this
     # machine; None means the cpm80-native format from each header.
-    image_format = MACHINES[machine]['disk_format']
+    image_format = MACHINES[machine].disk_format
 
     try:
         drives: list[DiskDrive] = []
